@@ -1,0 +1,47 @@
+{% extends 'core/base.html' %}
+{% block title %}Admin Dashboard - Sensore{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Admin Dashboard</h2>
+    <p>Manage users, clinicians, patients, and assignments</p>
+</div>
+
+<div class="admin-grid">
+    <div class="admin-card">
+        <h3>User Management</h3>
+        <p>Create and manage user accounts</p>
+        <a href="{% url 'admin:core_user_changelist' %}" class="btn-admin">Manage Users</a>
+    </div>
+    
+    <div class="admin-card">
+        <h3>Clinician Management</h3>
+        <p>View and manage clinician profiles</p>
+        <a href="{% url 'admin:core_clinicianprofile_changelist' %}" class="btn-admin">Manage Clinicians</a>
+    </div>
+    
+    <div class="admin-card">
+        <h3>Patient Management</h3>
+        <p>View and manage patient profiles</p>
+        <a href="{% url 'admin:core_patientprofile_changelist' %}" class="btn-admin">Manage Patients</a>
+    </div>
+    
+    <div class="admin-card">
+        <h3>Assignments</h3>
+        <p>Assign patients to clinicians</p>
+        <a href="{% url 'admin:core_assignment_changelist' %}" class="btn-admin">Manage Assignments</a>
+    </div>
+    
+    <div class="admin-card">
+        <h3>Pressure Data</h3>
+        <p>View sensor pressure frames</p>
+        <a href="{% url 'admin:core_pressureframe_changelist' %}" class="btn-admin">View Data</a>
+    </div>
+    
+    <div class="admin-card">
+        <h3>Comments</h3>
+        <p>Manage user comments and feedback</p>
+        <a href="{% url 'admin:core_comment_changelist' %}" class="btn-admin">View Comments</a>
+    </div>
+</div>
+{% endblock %}

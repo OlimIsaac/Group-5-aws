@@ -1,0 +1,352 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    color: #333;
+}
+
+nav {
+    background: #333;
+    color: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+nav a {
+    color: white;
+    text-decoration: none;
+    margin-right: 15px;
+    font-weight: bold;
+}
+
+nav a:hover {
+    text-decoration: underline;
+}
+
+main {
+    padding: 30px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Login Page */
+.login-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #f5f5f5;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    background: white;
+    border: 1px solid #ddd;
+    padding: 30px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-header h1 {
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+.login-header p {
+    color: #666;
+    font-size: 14px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #333;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-input::placeholder {
+    color: #999;
+}
+
+.error-inline {
+    color: #d32f2f;
+    font-size: 12px;
+    margin-top: 5px;
+    display: block;
+}
+
+.alert {
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.alert-error {
+    background: #ffebee;
+    color: #c62828;
+    border-left: 4px solid #c62828;
+}
+
+.alert-error p {
+    margin: 5px 0;
+}
+
+button {
+    width: 100%;
+    background: #333;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #555;
+}
+
+button:active {
+    background: #222;
+}
+
+.demo-credentials {
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin-top: 30px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.demo-credentials p {
+    margin: 0 0 15px 0;
+    font-weight: bold;
+}
+
+.demo-credentials table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.demo-credentials tr {
+    border-bottom: 1px solid #ddd;
+}
+
+.demo-credentials tr:last-child {
+    border-bottom: none;
+}
+
+.demo-credentials td {
+    padding: 8px 0;
+}
+
+.demo-credentials td:first-child {
+    font-weight: bold;
+    width: 70px;
+}
+
+.demo-credentials code {
+    background: white;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+    color: #333;
+    margin: 0 3px;
+}
+
+.login-footer {
+    text-align: center;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.login-footer p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.login-footer a {
+    color: #333;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.login-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Dashboard */
+.dashboard-header {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.dashboard-header h2 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.dashboard-header p {
+    margin: 5px 0 0 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.card h3 {
+    margin: 0 0 10px 0;
+    font-size: 18px;
+}
+
+.card p {
+    margin: 0 0 15px 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.btn-link {
+    background: #333;
+    color: white;
+    padding: 8px 15px;
+    text-decoration: none;
+    border-radius: 3px;
+    display: inline-block;
+    font-weight: bold;
+}
+
+.btn-link:hover {
+    background: #555;
+    text-decoration: none;
+    color: white;
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.admin-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+}
+
+.admin-card h3 {
+    margin: 0 0 10px 0;
+}
+
+.admin-card p {
+    margin: 0 0 15px 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.btn-admin {
+    background: #333;
+    color: white;
+    padding: 8px 15px;
+    text-decoration: none;
+    border-radius: 3px;
+    display: inline-block;
+    font-weight: bold;
+}
+
+.btn-admin:hover {
+    background: #555;
+    text-decoration: none;
+    color: white;
+}
+
+.metric-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.metric-card h4 {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    color: #999;
+    text-transform: uppercase;
+}
+
+.metric-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .login-container {
+        margin: 20px;
+    }
+    
+    main {
+        padding: 15px;
+    }
+    
+    nav {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

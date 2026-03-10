@@ -1,0 +1,17 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Home - Sensore{% endblock %}
+
+{% block content %}
+<div style="text-align: center; padding: 50px;">
+    <h1>Sensore</h1>
+    <p>Pressure Ulcer Prevention System</p>
+    
+    {% if user.is_authenticated %}
+        <p>Welcome, {{ user.first_name|default:user.username }}!</p>
+        <p>You are logged in as: <strong>{{ user.get_role_display }}</strong></p>
+    {% else %}
+        <p><a href="{% url 'login' %}" class="btn-link">Go to Login</a></p>
+    {% endif %}
+</div>
+{% endblock %}

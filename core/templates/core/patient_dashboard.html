@@ -1,0 +1,38 @@
+{% extends 'core/base.html' %}
+{% block title %}Patient Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Patient Dashboard</h2>
+    <p>Your pressure monitoring data</p>
+</div>
+
+<div class="card">
+    <h3>Live Heatmap</h3>
+    <canvas id="heatmapCanvas" width="320" height="320"></canvas>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div class="metric-card">
+        <h4>Peak Pressure Index</h4>
+        <p class="metric-value" id="ppiValue">--</p>
+    </div>
+    
+    <div class="metric-card">
+        <h4>Contact Area</h4>
+        <p class="metric-value" id="contactValue">--</p>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Time Filters</h3>
+    <button onclick="loadData(24)">Last 24 Hours</button>
+    <button onclick="loadData(6)">Last 6 Hours</button>
+    <button onclick="loadData(1)">Last Hour</button>
+</div>
+
+<div class="card">
+    <h3>Alerts</h3>
+    <div id="alerts">No alerts</div>
+</div>
+{% endblock %}
