@@ -2,10 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import login, logout, authenticate
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
 
-from .models import User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment
+from django.utils import timezone
+from datetime import timedelta
+from collections import defaultdict
+
+from .models import User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, PainZoneReport
 from .forms import CommentForm, AssignmentForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm
 
 
@@ -34,6 +38,66 @@ class PatientDashboardView(LoginRequiredMixin, View):
         frames = PressureFrame.objects.filter(user=request.user).order_by('-timestamp')[:100]
         comment_form = CommentForm()
         return render(request, 'core/patient_dashboard.html', {'frames': frames, 'comment_form': comment_form})
+
+
+class PatientStatusAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({"error": "forbidden"}, status=403)
+
+        try:
+            hours = int(request.GET.get('hours', 1))
+        except (ValueError, TypeError):
+            hours = 1
+        if hours not in (1, 6, 24):
+            hours = 1
+
+        now = timezone.now()
+        since = now - timedelta(hours=hours)
+        frames = PressureFrame.objects.filter(
+            user=request.user, timestamp__gte=since
+        ).order_by('timestamp')
+
+        if not frames.exists():
+            return JsonResponse({
+                "alert": False,
+                "latest_ppi": None,
+                "latest_contact": None,
+                "latest_matrix": None,
+                "chart_data": {"labels": [], "counts": []},
+            })
+
+        latest = frames.last()
+
+        # Build hour buckets for chart_data
+        hour_counts = defaultdict(int)
+        # Pre-fill every hour bucket in the window with 0
+        for offset in range(hours):
+            bucket_time = (now - timedelta(hours=hours - offset)).replace(
+                minute=0, second=0, microsecond=0
+            )
+            label = bucket_time.strftime("%H:%M")
+            hour_counts[label]  # ensures key exists with default 0
+
+        for frame in frames:
+            if frame.high_pressure_flag:
+                bucket = frame.timestamp.replace(
+                    minute=0, second=0, microsecond=0
+                ).strftime("%H:%M")
+                hour_counts[bucket] += 1
+
+        labels = sorted(hour_counts.keys())
+        counts = [hour_counts[l] for l in labels]
+
+        return JsonResponse({
+            "alert": latest.high_pressure_flag,
+            "latest_ppi": latest.peak_pressure_index,
+            "latest_contact": latest.contact_area_percentage,
+            "latest_matrix": latest.raw_matrix,
+            "chart_data": {"labels": labels, "counts": counts},
+        })
 
 
 class ClinicianDashboardView(LoginRequiredMixin, View):

@@ -1,6 +1,9 @@
+import json
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from .models import PainZoneReport, PREDEFINED_ZONES
+from django.utils import timezone
+from datetime import timedelta
+from .models import PainZoneReport, PREDEFINED_ZONES, PressureFrame
 from .forms import PainZoneReportForm
 
 User = get_user_model()
@@ -65,3 +68,84 @@ class PainZoneReportFormTest(TestCase):
         })
         self.assertFalse(form.is_valid())
         self.assertIn('note', form.errors)
+
+
+class PatientStatusAPITest(TestCase):
+    def setUp(self):
+        self.patient = User.objects.create_user(
+            username='pat', password='pass', role='patient'
+        )
+        self.client.login(username='pat', password='pass')
+
+    def _make_frame(self, minutes_ago, high_pressure=False):
+        matrix = [[0]*32 for _ in range(32)]
+        PressureFrame.objects.create(
+            user=self.patient,
+            timestamp=timezone.now() - timedelta(minutes=minutes_ago),
+            raw_matrix=matrix,
+            peak_pressure_index=4000.0 if high_pressure else 500.0,
+            contact_area_percentage=50.0,
+            high_pressure_flag=high_pressure,
+        )
+
+    def test_returns_json(self):
+        response = self.client.get('/patient/api/status/?hours=1')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertIn('alert', data)
+        self.assertIn('latest_ppi', data)
+        self.assertIn('latest_contact', data)
+        self.assertIn('latest_matrix', data)
+        self.assertIn('chart_data', data)
+
+    def test_safe_defaults_with_no_frames(self):
+        response = self.client.get('/patient/api/status/?hours=1')
+        data = json.loads(response.content)
+        self.assertFalse(data['alert'])
+        self.assertIsNone(data['latest_ppi'])
+        self.assertIsNone(data['latest_matrix'])
+        self.assertEqual(data['chart_data']['labels'], [])
+
+    def test_alert_true_when_latest_frame_is_high(self):
+        self._make_frame(minutes_ago=5, high_pressure=True)
+        response = self.client.get('/patient/api/status/?hours=1')
+        data = json.loads(response.content)
+        self.assertTrue(data['alert'])
+
+    def test_alert_false_when_latest_frame_is_normal(self):
+        self._make_frame(minutes_ago=5, high_pressure=False)
+        response = self.client.get('/patient/api/status/?hours=1')
+        data = json.loads(response.content)
+        self.assertFalse(data['alert'])
+
+    def test_non_patient_gets_403(self):
+        admin = User.objects.create_user(
+            username='adm', password='pass', role='admin'
+        )
+        self.client.login(username='adm', password='pass')
+        response = self.client.get('/patient/api/status/?hours=1')
+        self.assertEqual(response.status_code, 403)
+
+    def test_out_of_range_hours_defaults_to_one(self):
+        # Integer but not in {1,6,24} — should silently clamp, not error
+        response = self.client.get('/patient/api/status/?hours=999')
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_integer_hours_defaults_to_one(self):
+        # Non-integer value — exercises the ValueError branch in the view
+        response = self.client.get('/patient/api/status/?hours=abc')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertIn('alert', data)  # valid response shape returned
+
+    def test_chart_data_counts_high_pressure_frames_by_hour(self):
+        # 2 high-pressure frames, 1 normal — only high-pressure ones should be counted
+        self._make_frame(minutes_ago=20, high_pressure=True)
+        self._make_frame(minutes_ago=25, high_pressure=True)
+        self._make_frame(minutes_ago=35, high_pressure=False)
+        response = self.client.get('/patient/api/status/?hours=1')
+        data = json.loads(response.content)
+        # Labels and counts must always be the same length
+        self.assertEqual(len(data['chart_data']['labels']), len(data['chart_data']['counts']))
+        total_high = sum(data['chart_data']['counts'])
+        self.assertEqual(total_high, 2)
