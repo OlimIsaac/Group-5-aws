@@ -166,8 +166,6 @@ class PatientStatusAPITest(TestCase):
         self.assertEqual(len(data['chart_data']['counts']), 25)
 
 
-from .models import PainZoneReport
-
 class SubmitPainZonesViewTest(TestCase):
     def setUp(self):
         self.patient = User.objects.create_user(
