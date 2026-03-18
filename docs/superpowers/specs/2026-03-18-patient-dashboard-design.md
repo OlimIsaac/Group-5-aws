@@ -10,8 +10,8 @@
 
 1. Alert when pressure is too high so the patient knows when to move
 2. Simple and easy to use dashboard
-3. Mark painful areas on the heatmap so the clinician knows where there is discomfort
-4. Switch between time views (1h, 6h, 24h) to track pressure patterns
+3. Mark painful areas — implemented as a body-zone checklist below the dashboard (not canvas annotation); a deliberate scope decision agreed with the user
+4. Switch between time views (1h, 6h, 24h) to track pressure patterns — affects chart only
 5. See changes in pressure over time
 6. Private login so data stays secure
 
@@ -23,28 +23,46 @@
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `user` | ForeignKey(User) | The patient who submitted |
-| `timestamp` | DateTimeField | Auto-set on creation |
-| `zones` | JSONField | List of zone strings from predefined set |
-| `note` | TextField | Optional free-text note |
+| `user` | `ForeignKey(User, on_delete=CASCADE)` | The patient who submitted |
+| `timestamp` | `DateTimeField(auto_now_add=True)` | Auto-set on creation; not editable |
+| `zones` | `JSONField` | List of zone strings; must be subset of predefined set |
+| `note` | `TextField(blank=True)` | Optional free-text note |
 
-**Predefined zones:** `lower_back`, `left_hip`, `right_hip`, `left_thigh`, `right_thigh`, `tailbone`, `left_shoulder`, `right_shoulder`
+**Predefined zones (authoritative list):**
+`lower_back`, `left_hip`, `right_hip`, `left_thigh`, `right_thigh`, `tailbone`, `left_shoulder`, `right_shoulder`
 
-No changes to `PressureFrame` — `high_pressure_flag` and `peak_pressure_index` already exist.
+Each submission always creates a new `PainZoneReport` record (history preserved). No uniqueness constraint per day. No rate limiting in this version.
+
+No changes to `PressureFrame`.
 
 ---
 
 ## Backend
 
+### Updated: `PatientDashboardView` (`GET /patient/`)
+
+- Removes `frames` and `comment_form` from context (no longer used in the new template)
+- Adds to context: `zone_choices` (the 8 predefined zone strings), `latest_pain_report` (most recent `PainZoneReport` for the user, or `None`)
+
 ### New endpoint: `GET /patient/api/status/?hours=1|6|24`
 
-- Auth: `LoginRequiredMixin`, patient role only
-- Filters `PressureFrame` objects for `request.user` within the last N hours
-- Returns JSON:
+**Auth & role:**
+- Requires login (`LoginRequiredMixin`)
+- If `request.user.role != 'patient'`: return `JsonResponse({"error": "forbidden"}, status=403)` — **not** a redirect (redirect would break the JS fetch)
+
+**Parameter validation:**
+- `hours` must be in `{1, 6, 24}`; if not, default to `1` (do not return an error — silently clamp)
+
+**Query:**
+- Use `django.utils.timezone.now()` (not `datetime.datetime.now()`) for the `now` variable, so the filter works correctly under `USE_TZ = True`
+- Filters `PressureFrame.objects.filter(user=request.user, timestamp__gte=now - timedelta(hours=hours))`
+- Most recent frame = last by timestamp
+
+**Response shape (always return all keys):**
 
 ```json
 {
-  "alert": true,
+  "alert": false,
   "latest_ppi": 3812.0,
   "latest_contact": 42.3,
   "latest_matrix": [[...32x32 array...]],
@@ -55,59 +73,128 @@ No changes to `PressureFrame` — `high_pressure_flag` and `peak_pressure_index`
 }
 ```
 
-- `alert`: `true` if the most recent frame has `high_pressure_flag=True`
-- `chart_data.counts`: number of frames with `high_pressure_flag=True` grouped by hour within the window
-- Returns empty/safe defaults if no frames exist
+**Safe defaults when no frames exist:**
+```json
+{
+  "alert": false,
+  "latest_ppi": null,
+  "latest_contact": null,
+  "latest_matrix": null,
+  "chart_data": { "labels": [], "counts": [] }
+}
+```
+
+**`chart_data` computation:**
+- Group frames with `high_pressure_flag=True` by hour bucket
+- Labels are formatted in UTC (`datetime.strftime("%H:%M")` on UTC-aware timestamps)
+- One label per hour in the requested window (include hours with 0 count)
 
 ### New endpoint: `POST /patient/pain-zones/`
 
-- Auth: `LoginRequiredMixin`, patient role only
-- Accepts: `zones` (list of strings), `note` (optional string)
-- Creates a `PainZoneReport` for `request.user`
-- Redirects to `/patient/` with a Django success message
+**Auth & role:**
+- Requires login; if `request.user.role != 'patient'`: return `HttpResponseForbidden`
 
-### Updated: `PatientDashboardView` (`GET /patient/`)
+**Form class:** Create `PainZoneReportForm` in `core/forms.py` (consistent with the project's existing pattern of one form class per model). The form validates:
+- `zones`: `MultipleChoiceField` with choices from the predefined set of 8 strings; required (non-empty)
+- `note`: `CharField(max_length=1000, required=False)`
 
-- Passes to template: `zone_choices` (list of 8 predefined zone labels), `latest_pain_report` (most recent `PainZoneReport` for the user, or `None`)
+**On validation failure:** Re-render `patient_dashboard.html` with context `{"zone_choices": PREDEFINED_ZONES, "latest_pain_report": ..., "form": bound_form}` so checkboxes and error messages render correctly.
+
+**On success:**
+- Creates a `PainZoneReport`
+- `messages.success(request, "Pain zones submitted successfully")`
+- Redirects to `/patient/`
 
 ---
 
 ## Frontend
 
-### Layout (`patient_dashboard.html`)
+### Template: `patient_dashboard.html`
 
-Two-column layout:
+Replaces the existing stub entirely.
 
-**Left column:**
-- Heatmap canvas (320×320, existing `drawHeatmap()`)
-- PPI value (`#ppiValue`) and Contact Area (`#contactValue`) displayed below
+**Structure:**
+```
+<div class="patient-layout">  ← two-column flex/grid wrapper
+  <div class="col-left">
+    <canvas id="heatmapCanvas" width="320" height="320">
+    <p>PPI: <span id="ppiValue">--</span></p>
+    <p>Contact Area: <span id="contactValue">--</span></p>
+  </div>
+  <div class="col-right">
+    <div id="alertBanner" class="alert">...</div>   ← replaces old id="alerts"
+    <div class="time-filters">
+      <button data-hours="1">Last Hour</button>
+      <button data-hours="6">Last 6 Hours</button>
+      <button data-hours="24">Last 24 Hours</button>
+    </div>
+    <canvas id="pressureChart"></canvas>
+  </div>
+</div>
 
-**Right column:**
-- Alert banner (`#alertBanner`) — red background + "⚠ High pressure detected — please shift position" when `alert=true`; green + "Pressure looks normal" when `false`
-- Time filter buttons: `1h`, `6h`, `24h` — active button highlighted; clicking calls `loadData(N)` and updates `currentHours`
-- Bar chart (`Chart.js`) showing high-pressure frame count per hour within selected window
+<div class="card pain-zone-card">
+  <form method="post" action="{% url 'submit_pain_zones' %}">
+    {% csrf_token %}
+    <!-- 8 checkboxes, one per zone -->
+    <textarea name="note" ...></textarea>
+    <button type="submit">Submit</button>
+  </form>
+</div>
+```
 
-**Below both columns:**
-- Pain zone card — 8 checkbox buttons (one per predefined zone) + optional text note input + "Submit" button
-- Submits via standard HTML form POST to `/patient/pain-zones/`
+**Script tags** — placed inside `{% block scripts %}` (already present in `base.html`). The template must also declare `{% load static %}` at the top (Django does not inherit tag libraries from base templates):
+```html
+{% load static %}
+...
+{% block scripts %}
+<script src="{% static 'js/patient_dashboard.js' %}"></script>
+{% endblock %}
+```
+Chart.js CDN is already loaded in `base.html` unconditionally; no change needed there. Note: `heatmap.js` is also loaded unconditionally in `base.html` on all pages — this is an accepted pre-existing trade-off; do not move it.
 
-**Login page:**
-- No functional changes
-- Add a one-line note below the form: "Your data is private and only visible to you and your assigned clinician."
+**Login page:** Add one sentence below the submit button:
+> "Your data is private and only visible to you and your assigned clinician."
 
-### JavaScript (`core/static/js/patient_dashboard.js`)
+### JavaScript: `core/static/js/patient_dashboard.js`
 
-- `currentHours = 1` (default)
-- `loadData(hours)`:
-  1. Sets `currentHours = hours`
-  2. Fetches `/patient/api/status/?hours=hours`
-  3. Calls `drawHeatmap('heatmapCanvas', data.latest_matrix)` if matrix present
-  4. Updates `#ppiValue` and `#contactValue`
-  5. Shows/hides `#alertBanner` based on `data.alert`
-  6. Updates Chart.js instance with `data.chart_data`
-  7. Updates active state on time filter buttons
-- On page load: `loadData(1)`
-- Polling: `setInterval(() => loadData(currentHours), 8000)`
+```
+currentHours = 1
+
+loadData(hours):
+  currentHours = hours
+  fetch `/patient/api/status/?hours=${hours}`
+  → on success:
+      if data.latest_matrix !== null && Array.isArray(data.latest_matrix):
+          drawHeatmap('heatmapCanvas', data.latest_matrix)
+      ppiValue.textContent = data.latest_ppi !== null ? data.latest_ppi.toFixed(1) : '--'
+      contactValue.textContent = data.latest_contact !== null ? data.latest_contact.toFixed(1) + '%' : '--'
+      alertBanner.className = data.alert ? 'alert alert-danger' : 'alert alert-success'
+      alertBanner.textContent = data.alert
+          ? '⚠ High pressure detected — please shift position'
+          : 'Pressure looks normal'
+      // Replace arrays fully (not in-place mutation) so Chart.js handles length changes correctly:
+      pressureChart.data.labels = data.chart_data.labels
+      pressureChart.data.datasets[0].data = data.chart_data.counts
+      pressureChart.update()
+      highlight active time filter button (remove .active from siblings, add to clicked)
+  → on fetch error: leave existing UI unchanged (silent fail — do not crash polling loop)
+
+// Initialization order inside DOMContentLoaded:
+//   1. Construct the Chart.js instance first (assigned to pressureChart)
+//   2. Then call loadData(1)
+//   3. Then start setInterval
+on DOMContentLoaded:
+  pressureChart = new Chart(...)   ← must come BEFORE loadData(1)
+  loadData(1)
+  setInterval(() => loadData(currentHours), 8000)
+
+Chart.js instance:
+  type: 'bar'
+  label: 'High-pressure frames'
+  x-axis: chart_data.labels
+  y-axis: chart_data.counts (integers ≥ 0)
+  kept in a module-level variable so it can be `.update()`d each poll cycle
+```
 
 ---
 
@@ -119,16 +206,17 @@ One new migration for `PainZoneReport`.
 
 ## URLs added to `core/urls.py`
 
-```
-GET  /patient/api/status/    → PatientStatusAPIView
-POST /patient/pain-zones/    → SubmitPainZonesView
+```python
+path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
+path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
 ```
 
 ---
 
 ## What is NOT changing
 
-- Login/auth flow — already functional
+- Login/auth flow (functional already)
 - `PressureFrame` model and ingestion pipeline
-- Admin, clinician dashboards
-- Existing `drawHeatmap()` function in `heatmap.js`
+- Admin and clinician dashboards
+- `drawHeatmap()` in `heatmap.js`
+- `base.html` (Chart.js CDN already present; `{% block scripts %}` already present)
