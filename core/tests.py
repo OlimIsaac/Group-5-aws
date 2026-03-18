@@ -149,3 +149,18 @@ class PatientStatusAPITest(TestCase):
         self.assertEqual(len(data['chart_data']['labels']), len(data['chart_data']['counts']))
         total_high = sum(data['chart_data']['counts'])
         self.assertEqual(total_high, 2)
+
+    def test_six_hour_window_returns_seven_buckets(self):
+        # 6-hour window should produce 7 labels (hours 0 through 6 inclusive)
+        self._make_frame(minutes_ago=10)
+        response = self.client.get('/patient/api/status/?hours=6')
+        data = json.loads(response.content)
+        self.assertEqual(len(data['chart_data']['labels']), 7)
+        self.assertEqual(len(data['chart_data']['counts']), 7)
+
+    def test_twenty_four_hour_window_returns_twenty_five_buckets(self):
+        self._make_frame(minutes_ago=10)
+        response = self.client.get('/patient/api/status/?hours=24')
+        data = json.loads(response.content)
+        self.assertEqual(len(data['chart_data']['labels']), 25)
+        self.assertEqual(len(data['chart_data']['counts']), 25)

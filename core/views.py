@@ -71,25 +71,28 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
 
         latest = frames.last()
 
-        # Build hour buckets for chart_data
-        hour_counts = defaultdict(int)
-        # Pre-fill every hour bucket in the window with 0
-        for offset in range(hours):
+        # Build hour buckets for chart_data — sorted chronologically
+        # Use datetime objects as keys so cross-midnight windows don't collide on "%H:%M" strings
+        ordered_bucket_times = []
+        bucket_counts = {}
+        for offset in range(hours + 1):  # +1 to include the current hour
             bucket_time = (now - timedelta(hours=hours - offset)).replace(
                 minute=0, second=0, microsecond=0
             )
-            label = bucket_time.strftime("%H:%M")
-            hour_counts[label]  # ensures key exists with default 0
+            if bucket_time not in bucket_counts:
+                ordered_bucket_times.append(bucket_time)
+                bucket_counts[bucket_time] = 0
 
         for frame in frames:
             if frame.high_pressure_flag:
-                bucket = frame.timestamp.replace(
+                bucket_time = frame.timestamp.replace(
                     minute=0, second=0, microsecond=0
-                ).strftime("%H:%M")
-                hour_counts[bucket] += 1
+                )
+                if bucket_time in bucket_counts:
+                    bucket_counts[bucket_time] += 1
 
-        labels = sorted(hour_counts.keys())
-        counts = [hour_counts[l] for l in labels]
+        labels = [bt.strftime("%H:%M") for bt in ordered_bucket_times]
+        counts = [bucket_counts[bt] for bt in ordered_bucket_times]
 
         return JsonResponse({
             "alert": latest.high_pressure_flag,
