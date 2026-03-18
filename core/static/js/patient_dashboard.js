@@ -69,9 +69,11 @@
                 }
 
                 // Chart — replace arrays fully, do not mutate in place
-                pressureChart.data.labels = data.chart_data.labels;
-                pressureChart.data.datasets[0].data = data.chart_data.counts;
-                pressureChart.update();
+                if (data.chart_data && Array.isArray(data.chart_data.labels)) {
+                    pressureChart.data.labels = data.chart_data.labels;
+                    pressureChart.data.datasets[0].data = data.chart_data.counts;
+                    pressureChart.update();
+                }
             })
             .catch(function () {
                 // Silent fail — leave existing UI unchanged, keep polling
