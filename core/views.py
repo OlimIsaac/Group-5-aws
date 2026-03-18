@@ -9,8 +9,15 @@ from django.utils import timezone
 from datetime import timedelta
 from collections import defaultdict
 
-from .models import User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, PainZoneReport
-from .forms import CommentForm, AssignmentForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm
+from .models import (
+    User, PressureFrame, ClinicianProfile, Assignment,
+    PatientProfile, Comment, PainZoneReport, PREDEFINED_ZONES,
+)
+from .forms import (
+    CommentForm, AssignmentForm, UserForm,
+    ClinicianProfileForm, PatientProfileForm,
+    CustomUserCreationForm, PainZoneReportForm,
+)
 
 
 class HomeView(View):
@@ -32,12 +39,40 @@ class HomeView(View):
 class PatientDashboardView(LoginRequiredMixin, View):
     login_url = 'login'
 
-    def get(self, request):
+    def get(self, request, form=None):
         if request.user.role != User.ROLE_PATIENT:
             return redirect('home')
-        frames = PressureFrame.objects.filter(user=request.user).order_by('-timestamp')[:100]
-        comment_form = CommentForm()
-        return render(request, 'core/patient_dashboard.html', {'frames': frames, 'comment_form': comment_form})
+        if form is None:
+            form = PainZoneReportForm()
+        latest_pain_report = PainZoneReport.objects.filter(
+            user=request.user
+        ).order_by('-timestamp').first()
+        return render(request, 'core/patient_dashboard.html', {
+            'zone_choices': PREDEFINED_ZONES,
+            'latest_pain_report': latest_pain_report,
+            'form': form,
+        })
+
+
+class SubmitPainZonesView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def post(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return HttpResponseForbidden("Patients only")
+
+        form = PainZoneReportForm(request.POST)
+        if form.is_valid():
+            PainZoneReport.objects.create(
+                user=request.user,
+                zones=form.cleaned_data['zones'],
+                note=form.cleaned_data['note'],
+            )
+            messages.success(request, "Pain zones submitted successfully")
+            return redirect('patient_dashboard')
+
+        # Validation failed — re-render dashboard with bound form
+        return PatientDashboardView().get(request, form=form)
 
 
 class PatientStatusAPIView(LoginRequiredMixin, View):

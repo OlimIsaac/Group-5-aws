@@ -164,3 +164,60 @@ class PatientStatusAPITest(TestCase):
         data = json.loads(response.content)
         self.assertEqual(len(data['chart_data']['labels']), 25)
         self.assertEqual(len(data['chart_data']['counts']), 25)
+
+
+from .models import PainZoneReport
+
+class SubmitPainZonesViewTest(TestCase):
+    def setUp(self):
+        self.patient = User.objects.create_user(
+            username='painpat', password='pass', role='patient'
+        )
+        self.client.login(username='painpat', password='pass')
+
+    def test_valid_submission_creates_report(self):
+        response = self.client.post('/patient/pain-zones/', {
+            'zones': ['lower_back', 'tailbone'],
+            'note': 'sharp pain',
+        })
+        self.assertRedirects(response, '/patient/')
+        self.assertEqual(PainZoneReport.objects.filter(user=self.patient).count(), 1)
+        report = PainZoneReport.objects.get(user=self.patient)
+        self.assertEqual(sorted(report.zones), ['lower_back', 'tailbone'])
+        self.assertEqual(report.note, 'sharp pain')
+
+    def test_invalid_zone_does_not_create_report(self):
+        response = self.client.post('/patient/pain-zones/', {
+            'zones': ['made_up_zone'],
+            'note': '',
+        })
+        self.assertEqual(response.status_code, 200)  # re-renders dashboard
+        self.assertEqual(PainZoneReport.objects.filter(user=self.patient).count(), 0)
+
+    def test_non_patient_forbidden(self):
+        admin = User.objects.create_user(
+            username='adminx', password='pass', role='admin'
+        )
+        self.client.login(username='adminx', password='pass')
+        response = self.client.post('/patient/pain-zones/', {
+            'zones': ['lower_back'],
+        })
+        self.assertEqual(response.status_code, 403)
+
+
+class PatientDashboardViewTest(TestCase):
+    def setUp(self):
+        self.patient = User.objects.create_user(
+            username='dashpat', password='pass', role='patient'
+        )
+        self.client.login(username='dashpat', password='pass')
+
+    def test_dashboard_renders_with_zone_choices(self):
+        response = self.client.get('/patient/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('zone_choices', response.context)
+        self.assertEqual(len(response.context['zone_choices']), 8)
+
+    def test_dashboard_context_has_no_frames_key(self):
+        response = self.client.get('/patient/')
+        self.assertNotIn('frames', response.context)
