@@ -635,3 +635,9 @@ main {
     font-size: 0.875rem;
     margin-top: 0.25rem;
 }
+.privacy-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 0.75rem;
+}
