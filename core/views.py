@@ -1,3 +1,5 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -11,7 +13,7 @@ from collections import defaultdict
 
 from .models import (
     User, PressureFrame, ClinicianProfile, Assignment,
-    PatientProfile, Comment, PainZoneReport, PREDEFINED_ZONES,
+    PatientProfile, Comment, PainZoneReport, HeatmapAnnotation, PREDEFINED_ZONES,
 )
 from .forms import (
     CommentForm, AssignmentForm, UserForm,
@@ -129,13 +131,42 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
         labels = [bt.strftime("%H:%M") for bt in ordered_bucket_times]
         counts = [bucket_counts[bt] for bt in ordered_bucket_times]
 
+        latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).first()
+
         return JsonResponse({
             "alert": latest.high_pressure_flag,
             "latest_ppi": latest.peak_pressure_index,
             "latest_contact": latest.contact_area_percentage,
             "latest_matrix": latest.raw_matrix,
             "chart_data": {"labels": labels, "counts": counts},
+            "saved_annotation": latest_annotation.cells if latest_annotation else [],
         })
+
+
+class SaveHeatmapAnnotationView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def post(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({"error": "forbidden"}, status=403)
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "invalid JSON"}, status=400)
+
+        cells = body.get('cells', [])
+        note = body.get('note', '')
+
+        if not isinstance(cells, list):
+            return JsonResponse({"error": "cells must be a list"}, status=400)
+        for cell in cells:
+            if not (isinstance(cell, list) and len(cell) == 2 and
+                    isinstance(cell[0], int) and isinstance(cell[1], int) and
+                    0 <= cell[0] < 32 and 0 <= cell[1] < 32):
+                return JsonResponse({"error": "invalid cell coordinates"}, status=400)
+
+        HeatmapAnnotation.objects.create(user=request.user, cells=cells, note=note)
+        return JsonResponse({"status": "saved", "count": len(cells)})
 
 
 class ClinicianDashboardView(LoginRequiredMixin, View):
@@ -144,14 +175,26 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.role != User.ROLE_CLINICIAN:
             return redirect('home')
-        # Get assigned patients
         try:
             profile = ClinicianProfile.objects.get(user=request.user)
-            assignments = Assignment.objects.filter(clinician=profile)
+            assignments = Assignment.objects.filter(clinician=profile).select_related('patient__user')
         except ClinicianProfile.DoesNotExist:
             assignments = []
-        
-        return render(request, 'core/clinician_dashboard.html', {'assignments': assignments})
+
+        patients_data = []
+        for assignment in assignments:
+            patient_user = assignment.patient.user
+            latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
+            latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
+            patients_data.append({
+                'assignment': assignment,
+                'latest_frame': latest_frame,
+                'latest_annotation': latest_annotation,
+                'matrix_json': json.dumps(latest_frame.raw_matrix) if latest_frame else 'null',
+                'cells_json': json.dumps(latest_annotation.cells) if latest_annotation else '[]',
+            })
+
+        return render(request, 'core/clinician_dashboard.html', {'patients_data': patients_data})
 
 
 class AdminDashboardView(LoginRequiredMixin, View):

@@ -18,7 +18,16 @@
     <!-- Left column: heatmap + metrics -->
     <div class="col-left card">
         <h3>Live Heatmap</h3>
-        <canvas id="heatmapCanvas" width="320" height="320"></canvas>
+        <div class="heatmap-wrapper">
+            <canvas id="heatmapCanvas" width="320" height="320"></canvas>
+            <canvas id="annotationCanvas" width="320" height="320" title="Click or drag to mark painful areas"></canvas>
+        </div>
+        <div class="annotation-controls">
+            <button id="annotateToggleBtn" class="btn btn-outline btn-sm" type="button">Mark Pain on Heatmap</button>
+            <button id="annotateClearBtn" class="btn btn-outline btn-sm" type="button">Clear Marks</button>
+            <button id="annotateSaveBtn" class="btn btn-primary btn-sm" type="button">Save Pain Marks</button>
+        </div>
+        <p id="annotationStatus" class="annotation-status"></p>
         <div class="metrics-grid">
             <div class="metric-card">
                 <h4>Peak Pressure Index</h4>

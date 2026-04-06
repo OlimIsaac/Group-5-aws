@@ -536,6 +536,83 @@ main {
 .align-items-center { align-items: center; }
 .w-100 { width: 100%; }
 
+/* Heatmap wrapper — stacks heatmap and annotation overlay */
+.heatmap-wrapper {
+    position: relative;
+    display: inline-block;
+    line-height: 0; /* remove gap under canvases */
+}
+
+.heatmap-wrapper canvas:nth-child(2) {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none; /* enabled by JS when annotating */
+}
+
+/* Annotation controls below heatmap */
+.annotation-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+#annotateToggleBtn.active {
+    background-color: var(--danger-color);
+    color: white;
+    border-color: var(--danger-color);
+}
+
+.annotation-status {
+    font-size: 0.85rem;
+    min-height: 1.25em;
+    margin-top: 0.25rem;
+    margin-bottom: 0;
+}
+
+.annotation-status.saved {
+    color: var(--secondary-color);
+}
+
+.annotation-status.error {
+    color: var(--danger-color);
+}
+
+/* Clinician dashboard patient grid */
+.clinician-patient-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.clinician-patient-card {
+    text-align: center;
+}
+
+.clinician-patient-card h4 {
+    margin-bottom: 0.25rem;
+}
+
+.heatmap-sm {
+    width: 192px;
+    height: 192px;
+    margin: 0 auto 0.5rem;
+}
+
+.annotation-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0.25rem 0 0;
+}
+
+.annotation-note-text {
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--text-secondary);
+    margin: 0.15rem 0 0;
+}
+
 /* Patient Dashboard Two-Column Layout */
 .patient-layout {
     display: grid;

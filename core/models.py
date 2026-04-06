@@ -89,3 +89,17 @@ class PainZoneReport(models.Model):
 
     def __str__(self):
         return f"PainZoneReport by {self.user.username} at {self.timestamp}"
+
+
+class HeatmapAnnotation(models.Model):
+    """Stores the cells a patient has marked as painful on the pressure heatmap."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='heatmap_annotations')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    cells = models.JSONField()  # list of [row, col] pairs, each in range [0, 31]
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"HeatmapAnnotation by {self.user.username} at {self.timestamp}"
