@@ -152,6 +152,259 @@ button:active {
     background: #222;
 }
 
+.btn-admin,
+.btn-link {
+    display: inline-block;
+    text-decoration: none;
+    background: #2c7be5;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 5px;
+    transition: background 0.2s ease;
+    margin-top: 15px;
+}
+
+.btn-admin:hover,
+.btn-link:hover {
+    background: #1f5bb8;
+}
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.admin-card {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 25px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+.admin-card h3 {
+    margin-top: 0;
+    font-size: 20px;
+}
+
+.admin-card p {
+    color: #555;
+    line-height: 1.5;
+}
+
+.admin-card .btn-admin {
+    margin-top: 20px;
+}
+
+nav {
+    background: #1f3c88;
+    color: white;
+    padding: 18px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+nav a {
+    color: white;
+}
+
+nav .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+nav .admin-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+nav span {
+    color: #d4dfe8;
+}
+
+.home-admin-panel {
+    margin-top: 20px;
+}
+
+.quick-link-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.quick-link-grid a {
+    text-align: center;
+}
+
+.table-container {
+    background: white;
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 18px 50px rgba(32, 40, 61, 0.08);
+    overflow-x: auto;
+}
+
+.management-table,
+.assignments-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 700px;
+}
+
+.management-table th,
+.assignments-table th {
+    background-color: #f4f7fb;
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 700;
+    color: #344050;
+}
+
+.management-table td,
+.assignments-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e8eff7;
+    color: #4a5568;
+}
+
+.management-table tbody tr:hover,
+.assignments-table tbody tr:hover {
+    background-color: #f1f5f9;
+}
+
+.btn-admin,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-info,
+.btn-link {
+    border-radius: 8px;
+    transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-admin,
+.btn-primary {
+    background: #1f3c88;
+    color: white;
+    padding: 12px 20px;
+    text-decoration: none;
+    display: inline-block;
+    border: none;
+}
+
+.btn-admin:hover,
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-danger:hover,
+.btn-info:hover,
+.btn-link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 24px rgba(31, 47, 97, 0.15);
+}
+
+.btn-secondary {
+    display: inline-block;
+    background: #5a6ead;
+    color: white;
+    padding: 10px 16px;
+    text-decoration: none;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    padding: 0.5rem 0.9rem;
+    display: inline-block;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    color: white;
+    padding: 0.45rem 0.85rem;
+    display: inline-block;
+}
+
+.btn-link {
+    background: #1f3c88;
+    color: white;
+    padding: 10px 18px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-link:hover {
+    background: #1a336f;
+}
+
+.dashboard-header {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 12px 30px rgba(26, 44, 97, 0.06);
+}
+
+.dashboard-header h2 {
+    margin: 0;
+    font-size: 28px;
+    color: #172b4d;
+}
+
+.dashboard-header p {
+    margin: 12px 0 0;
+    color: #5b6d8b;
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+.admin-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 14px 28px rgba(31, 47, 97, 0.06);
+}
+
+.admin-card h3 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    color: #172b4d;
+}
+
+.admin-card p {
+    margin: 0 0 18px;
+    color: #5b6d8b;
+    line-height: 1.7;
+}
+
+@media (max-width: 768px) {
+    nav {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-nav-links,
+    .nav-links {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .quick-link-grid {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+}
+
 .demo-credentials {
     background: #f0f0f0;
     border: 1px solid #ddd;
