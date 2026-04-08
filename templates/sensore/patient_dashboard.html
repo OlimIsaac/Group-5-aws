@@ -1,0 +1,609 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — Sensore{% endblock %}
+{% block nav_patient %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── HEATMAP CANVAS ── */
+  .heatmap-container {
+    position: relative;
+    background: rgba(0,0,0,0.3);
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 1/1;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+  #heatmapCanvas {
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    display: block;
+  }
+  .heatmap-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .heatmap-legend {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 10px; font-size: 0.72rem; color: var(--mist);
+    justify-content: center;
+  }
+  .legend-bar {
+    height: 8px; width: 140px; border-radius: 4px;
+    background: linear-gradient(to right, #0a1628, #00308f, #00c8ff, #ffd700, #ff4500, #ff0000);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  /* ── FRAME SCRUBBER ── */
+  .scrubber-wrap {
+    margin-top: 0.75rem;
+  }
+  .scrubber-wrap input[type=range] {
+    width: 100%; accent-color: var(--teal);
+    cursor: pointer;
+  }
+  .scrubber-labels {
+    display: flex; justify-content: space-between;
+    font-size: 0.72rem; color: var(--mist); margin-top: 4px;
+  }
+
+  /* ── LIVE BADGE ── */
+  .live-indicator {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.72rem; font-family: var(--font-mono);
+    color: var(--green); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    animation: live-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes live-pulse {
+    0%,100%{ opacity:1; transform:scale(1); }
+    50%{ opacity:0.4; transform:scale(0.8); }
+  }
+
+  /* ── PLAIN ENGLISH BOX ── */
+  .explanation-box {
+    background: rgba(0,212,200,0.05);
+    border: 1px solid rgba(0,212,200,0.15);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    font-size: 0.875rem;
+    color: var(--pale);
+    line-height: 1.7;
+    white-space: pre-line;
+  }
+  .explanation-box .expl-icon { font-size: 1.1rem; margin-right: 4px; }
+
+  /* ── COMMENTS ── */
+  .comments-list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 340px; overflow-y: auto; }
+  .comment-item {
+    background: rgba(255,255,255,0.04); border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.07); padding: 0.75rem 1rem;
+  }
+  .comment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+  .comment-author { font-size: 0.8rem; font-weight: 600; }
+  .comment-author.patient   { color: var(--teal); }
+  .comment-author.clinician { color: var(--amber); }
+  .comment-time { font-size: 0.7rem; color: var(--mist); font-family: var(--font-mono); }
+  .comment-text { font-size: 0.875rem; color: var(--pale); line-height: 1.5; }
+  .comment-ts   { font-size: 0.72rem; color: var(--mist); margin-top: 5px; }
+  .comment-replies { margin-top: 8px; padding-left: 1rem; border-left: 2px solid rgba(245,158,11,0.3); }
+  .reply-item { font-size: 0.82rem; color: var(--fog); padding: 4px 0; }
+  .reply-author { color: var(--amber); font-weight: 600; font-size: 0.78rem; margin-right: 5px; }
+
+  /* ── SESSION SELECTOR ── */
+  .session-select-wrap { display: flex; align-items: center; gap: 10px; }
+
+  /* ── CHART ── */
+  #metricsChart { max-height: 180px; }
+
+  /* ── ALERT ITEMS ── */
+  .alert-item {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 0.75rem 1rem;
+    background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2);
+    border-radius: var(--radius-sm); gap: 0.75rem;
+  }
+  .alert-item.critical { background: rgba(124,58,237,0.08); border-color: rgba(124,58,237,0.3); }
+  .alert-msg { font-size: 0.85rem; color: #fca5a5; flex: 1; line-height: 1.5; }
+  .alert-item.critical .alert-msg { color: #c4b5fd; }
+  .alert-time { font-size: 0.7rem; color: var(--mist); font-family: var(--font-mono); white-space: nowrap; }
+
+  /* ── HOTZONE MARKERS ── */
+  .hotzone-marker {
+    position: absolute; width: 10px; height: 10px;
+    border: 2px solid rgba(255,255,255,0.8); border-radius: 50%;
+    background: transparent;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: hotzone-ring 1.6s ease-in-out infinite;
+  }
+  @keyframes hotzone-ring {
+    0%,100%{ box-shadow: 0 0 0 0 rgba(255,69,0,0.6); }
+    50%{ box-shadow: 0 0 0 5px rgba(255,69,0,0); }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <!-- PAGE HEADER -->
+  <div class="page-header flex items-center justify-between">
+    <div>
+      <h1>My Pressure Dashboard</h1>
+      <p>Real-time sitting position analysis · Sensore Mat</p>
+    </div>
+    <div class="session-select-wrap">
+      <label class="form-label" style="margin:0">Session:</label>
+      <select class="form-control" id="sessionSelect" style="width:auto; min-width:210px">
+        {% for s in sessions %}
+        <option value="{{ s.id }}" {% if selected_session and s.id == selected_session.id %}selected{% endif %}>
+          {{ s.session_date }} — {{ s.start_time|date:"H:i" }}
+        </option>
+        {% empty %}
+        <option>No sessions available</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  {% if alerts %}
+  <div class="mb-2">
+    {% for alert in alerts %}
+    <div class="alert-item {% if alert.risk_score >= 75 %}critical{% endif %}" id="alert-{{ alert.id }}">
+      <div>
+        <div class="alert-msg">⚠ {{ alert.message }}</div>
+        <div class="alert-time">{{ alert.created_at|date:"d M Y, H:i" }}</div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="acknowledgeAlert({{ alert.id }})">Dismiss</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- MAIN GRID -->
+  <div class="grid-2" style="gap:1.25rem">
+
+    <!-- LEFT: HEATMAP + CONTROLS -->
+    <div style="display:flex; flex-direction:column; gap:1.25rem">
+
+      <!-- LIVE HEATMAP -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Live Pressure Heatmap</span>
+          <span class="live-indicator">
+            <span class="live-dot"></span> Live
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="heatmap-container">
+            <canvas id="heatmapCanvas" width="32" height="32"></canvas>
+            <div class="heatmap-overlay" id="heatmapOverlay"></div>
+          </div>
+          <div class="heatmap-legend">
+            <span>None</span>
+            <div class="legend-bar"></div>
+            <span>Critical</span>
+          </div>
+          <div class="scrubber-wrap">
+            <input type="range" id="frameScrubber" min="0" max="0" value="0" />
+            <div class="scrubber-labels">
+              <span id="scrubberStart">—</span>
+              <span id="frameInfo" class="mono" style="font-size:0.7rem;color:var(--teal)">Frame <span id="frameNum">—</span></span>
+              <span id="scrubberEnd">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- METRICS TIMELINE CHART -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Risk Score Over Time</span>
+        </div>
+        <div class="card-body">
+          <canvas id="metricsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: METRICS + EXPLANATION + COMMENTS -->
+    <div style="display:flex; flex-direction:column; gap:1.25rem">
+
+      <!-- KEY METRICS -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Current Metrics</span>
+          <span id="riskBadge" class="risk-badge low">Low Risk</span>
+        </div>
+        <div class="card-body">
+          <div class="grid-2" style="gap:1rem">
+            <div class="metric-block">
+              <div class="metric-label">Peak Pressure Index</div>
+              <div class="metric-value" id="metricPPI">—</div>
+              <div class="metric-sub">/ 4095 max</div>
+            </div>
+            <div class="metric-block">
+              <div class="metric-label">Contact Area</div>
+              <div class="metric-value" id="metricArea">—</div>
+              <div class="metric-sub">% of mat surface</div>
+            </div>
+            <div class="metric-block">
+              <div class="metric-label">Risk Score</div>
+              <div class="metric-value" id="metricRisk">—</div>
+              <div class="metric-sub">/ 100</div>
+            </div>
+            <div class="metric-block">
+              <div class="metric-label">Asymmetry</div>
+              <div class="metric-value" id="metricAsym">—</div>
+              <div class="metric-sub">% left/right imbalance</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLAIN ENGLISH EXPLANATION -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">What This Means</span>
+        </div>
+        <div class="card-body">
+          <div class="explanation-box" id="explanationBox">
+            Select a session and frame to see a plain-English explanation of your pressure data.
+          </div>
+        </div>
+      </div>
+
+      <!-- COMMENTS -->
+      <div class="card" style="flex:1">
+        <div class="card-header">
+          <span class="card-title">My Notes</span>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:0.75rem">
+          <!-- Add comment form -->
+          <div class="form-group">
+            <textarea id="commentText" class="form-control" placeholder="Add a note about your current position or how you're feeling..."></textarea>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="submitComment()" style="align-self:flex-start">
+            Add Note
+          </button>
+          <div class="comments-list" id="commentsList">
+            <div class="text-muted" style="font-size:0.85rem;text-align:center;padding:1rem">
+              No notes yet. Add a comment above.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+let allFrames = [];
+let currentFrameIndex = 0;
+let currentSessionId = {{ selected_session.id|default:'null' }};
+let metricsChart = null;
+
+// ── COLOUR MAP (navy → blue → cyan → yellow → red) ──
+function pressureToColour(val) {
+  const v = Math.max(1, Math.min(4095, val));
+  const t = (v - 1) / 4094;
+  // 5-stop colour ramp
+  const stops = [
+    [10, 22, 40],    // 0.0 navy (no contact)
+    [0, 48, 143],    // 0.25 deep blue
+    [0, 200, 255],   // 0.5 cyan
+    [255, 215, 0],   // 0.75 gold
+    [255, 40, 0],    // 1.0 red (critical)
+  ];
+  const seg = t * (stops.length - 1);
+  const i = Math.min(Math.floor(seg), stops.length - 2);
+  const f = seg - i;
+  const a = stops[i], b = stops[i + 1];
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * f),
+    Math.round(a[1] + (b[1] - a[1]) * f),
+    Math.round(a[2] + (b[2] - a[2]) * f),
+  ];
+}
+
+// ── DRAW HEATMAP ──
+function drawHeatmap(data32x32) {
+  const canvas = document.getElementById('heatmapCanvas');
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(32, 32);
+  const flat = data32x32.flat ? data32x32.flat() : data32x32;
+  for (let i = 0; i < 1024; i++) {
+    const [r, g, b] = pressureToColour(flat[i]);
+    imgData.data[i * 4]     = r;
+    imgData.data[i * 4 + 1] = g;
+    imgData.data[i * 4 + 2] = b;
+    imgData.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// ── UPDATE HOT ZONE MARKERS ──
+function updateHotZones(hotZones) {
+  const overlay = document.getElementById('heatmapOverlay');
+  overlay.innerHTML = '';
+  const container = document.querySelector('.heatmap-container');
+  const w = container.offsetWidth;
+  const h = container.offsetHeight;
+  hotZones.slice(0, 3).forEach(z => {
+    const el = document.createElement('div');
+    el.className = 'hotzone-marker';
+    el.style.left = ((z.x + 0.5) / 32 * 100) + '%';
+    el.style.top  = ((z.y + 0.5) / 32 * 100) + '%';
+    overlay.appendChild(el);
+  });
+}
+
+// ── UPDATE METRICS DISPLAY ──
+function updateMetrics(metrics) {
+  if (!metrics) return;
+  const ppi  = document.getElementById('metricPPI');
+  const area = document.getElementById('metricArea');
+  const risk = document.getElementById('metricRisk');
+  const asym = document.getElementById('metricAsym');
+  const badge= document.getElementById('riskBadge');
+  const expl = document.getElementById('explanationBox');
+
+  ppi.textContent  = metrics.ppi?.toFixed(0) ?? '—';
+  area.textContent = (metrics.contact_area?.toFixed(1) ?? '—') + '%';
+  risk.textContent = metrics.risk_score?.toFixed(0) ?? '—';
+  asym.textContent = (metrics.asymmetry?.toFixed(1) ?? '—') + '%';
+
+  // Colour code metric values
+  const rl = metrics.risk_level || 'low';
+  risk.className = `metric-value ${rl}`;
+
+  // Risk badge
+  badge.className = `risk-badge ${rl}`;
+  badge.textContent = rl.charAt(0).toUpperCase() + rl.slice(1) + ' Risk';
+
+  // Explanation
+  if (metrics.plain_english) {
+    expl.textContent = metrics.plain_english;
+  }
+
+  // Hot zones
+  if (metrics.hot_zones) {
+    updateHotZones(metrics.hot_zones);
+  }
+}
+
+// ── LOAD SESSION FRAMES ──
+async function loadSession(sessionId) {
+  currentSessionId = sessionId;
+  try {
+    const resp = await fetch(`/api/session/${sessionId}/frames/`);
+    const data = await resp.json();
+    allFrames = data.frames || [];
+
+    // Update scrubber
+    const scrubber = document.getElementById('frameScrubber');
+    scrubber.max = Math.max(0, allFrames.length - 1);
+    scrubber.value = allFrames.length - 1;
+
+    if (allFrames.length > 0) {
+      const first = allFrames[0];
+      const last  = allFrames[allFrames.length - 1];
+      document.getElementById('scrubberStart').textContent = new Date(first.timestamp).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+      document.getElementById('scrubberEnd').textContent   = new Date(last.timestamp).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+    }
+
+    // Show latest frame
+    showFrame(allFrames.length - 1);
+
+    // Load chart
+    loadMetricsChart(sessionId);
+
+    // Load comments
+    loadComments(sessionId);
+
+  } catch (e) {
+    console.error('Failed to load session:', e);
+  }
+}
+
+// ── SHOW SPECIFIC FRAME ──
+function showFrame(idx) {
+  if (!allFrames.length) return;
+  idx = Math.max(0, Math.min(idx, allFrames.length - 1));
+  currentFrameIndex = idx;
+  const frame = allFrames[idx];
+
+  drawHeatmap(frame.data);
+  updateMetrics(frame.metrics);
+
+  document.getElementById('frameNum').textContent = frame.frame_index;
+}
+
+// ── SCRUBBER ──
+document.getElementById('frameScrubber').addEventListener('input', function() {
+  showFrame(parseInt(this.value));
+});
+
+// ── SESSION SELECT ──
+document.getElementById('sessionSelect').addEventListener('change', function() {
+  loadSession(parseInt(this.value));
+});
+
+// ── METRICS CHART ──
+async function loadMetricsChart(sessionId) {
+  const resp = await fetch(`/api/session/${sessionId}/metrics/`);
+  const data = await resp.json();
+  const timeline = data.timeline || [];
+
+  const labels = timeline.map((_, i) => `Frame ${i + 1}`);
+  const riskData = timeline.map(t => t.risk_score);
+  const ppiData  = timeline.map(t => (t.ppi / 4095 * 100).toFixed(1));
+
+  if (metricsChart) metricsChart.destroy();
+
+  const ctx = document.getElementById('metricsChart').getContext('2d');
+  metricsChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Risk Score',
+          data: riskData,
+          borderColor: '#00d4c8',
+          backgroundColor: 'rgba(0,212,200,0.08)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+        {
+          label: 'PPI %',
+          data: ppiData,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8fa8be', font: { size: 11 } } }
+      },
+      scales: {
+        x: { ticks: { color: '#5a7a9a', font: { size: 9 }, maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: '#5a7a9a', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' }, min: 0, max: 100 }
+      }
+    }
+  });
+}
+
+// ── COMMENTS ──
+async function loadComments(sessionId) {
+  const resp = await fetch(`/api/session/${sessionId}/comments/`);
+  const data = await resp.json();
+  renderComments(data.comments || []);
+}
+
+function renderComments(comments) {
+  const list = document.getElementById('commentsList');
+  if (!comments.length) {
+    list.innerHTML = '<div class="text-muted" style="font-size:0.85rem;text-align:center;padding:1rem">No notes yet.</div>';
+    return;
+  }
+  list.innerHTML = comments.map(c => `
+    <div class="comment-item">
+      <div class="comment-header">
+        <span class="comment-author ${c.author_type}">${c.author} <small style="font-weight:400;opacity:0.7">(${c.author_type})</small></span>
+        <span class="comment-time">${new Date(c.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <div class="comment-text">${escHtml(c.text)}</div>
+      <div class="comment-ts">📍 Ref: ${new Date(c.timestamp).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'})}</div>
+      ${c.replies?.length ? `
+        <div class="comment-replies">
+          ${c.replies.map(r => `
+            <div class="reply-item">
+              <span class="reply-author">${r.author}</span> ${escHtml(r.text)}
+              <span style="font-size:0.68rem;color:var(--mist);margin-left:6px">${new Date(r.created_at).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function submitComment() {
+  const text = document.getElementById('commentText').value.trim();
+  if (!text || !currentSessionId) return;
+
+  const currentFrame = allFrames[currentFrameIndex];
+  const payload = {
+    text,
+    frame_id: currentFrame?.id || null,
+    timestamp: currentFrame?.timestamp || new Date().toISOString(),
+  };
+
+  const resp = await fetch(`/api/session/${currentSessionId}/comment/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify(payload),
+  });
+
+  if (resp.ok) {
+    document.getElementById('commentText').value = '';
+    loadComments(currentSessionId);
+  }
+}
+
+async function acknowledgeAlert(alertId) {
+  await fetch(`/api/alert/${alertId}/acknowledge/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': CSRF }
+  });
+  document.getElementById(`alert-${alertId}`)?.remove();
+}
+
+// ── INIT ──
+if (currentSessionId) {
+  loadSession(currentSessionId);
+}
+
+// ── AUTO-POLL: refresh latest frame every 30s ──
+let pollingInterval = null;
+
+function startPolling() {
+  stopPolling();
+  pollingInterval = setInterval(async () => {
+    if (!currentSessionId) return;
+    try {
+      const resp = await fetch(`/api/session/${currentSessionId}/latest/`);
+      if (!resp.ok) return;
+      const frame = await resp.json();
+      if (!frame.data) return;
+      const scrubber = document.getElementById("frameScrubber");
+      const isAtLatest = parseInt(scrubber.value) >= parseInt(scrubber.max);
+      const existingIdx = allFrames.findIndex(f => f.id === frame.id);
+      if (existingIdx === -1) {
+        allFrames.push(frame);
+        scrubber.max = allFrames.length - 1;
+        if (isAtLatest) {
+          scrubber.value = allFrames.length - 1;
+          showFrame(allFrames.length - 1);
+        }
+      } else if (isAtLatest) {
+        showFrame(allFrames.length - 1);
+      }
+    } catch (e) {}
+  }, 30000);
+}
+
+function stopPolling() {
+  if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+}
+
+document.getElementById("sessionSelect").addEventListener("change", () => startPolling());
+if (currentSessionId) startPolling();
+</script>
+{% endblock %}

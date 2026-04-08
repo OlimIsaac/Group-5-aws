@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Sensore — Design Documentation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --navy:#0a1628; --navy-mid:#0f2744; --navy-light:#1a3a5c;
+    --steel:#2e4d6b; --mist:#5a7a9a; --fog:#8fa8be; --pale:#c8daea;
+    --ice:#e8f2fb; --white:#f5f9ff;
+    --teal:#00d4c8; --teal-dim:#00a89e;
+    --amber:#f59e0b; --red:#ef4444; --green:#22c55e; --purple:#7c3aed;
+    --card-bg:rgba(15,39,68,0.9); --card-border:rgba(0,212,200,0.12);
+    --radius:12px; --radius-sm:7px;
+    --font-main:'DM Sans',sans-serif; --font-mono:'Space Mono',monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font-main);background:var(--navy);color:var(--white);
+    background-image:radial-gradient(ellipse 80% 60% at 50% -10%,rgba(0,212,200,0.08) 0%,transparent 70%);}
+  .wrap{max-width:1100px;margin:0 auto;padding:3rem 2rem;}
+  h1{font-size:2rem;font-weight:700;color:var(--white);}
+  h2{font-size:1.2rem;font-weight:700;color:var(--teal);margin:2.5rem 0 0.75rem;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.06em;}
+  h3{font-size:1rem;font-weight:600;color:var(--pale);margin:1.5rem 0 0.5rem;}
+  p{font-size:0.9rem;color:var(--fog);line-height:1.75;margin-bottom:0.75rem;}
+  .subtitle{font-size:1rem;color:var(--mist);margin-top:0.25rem;margin-bottom:2rem;}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:0.7rem;font-family:var(--font-mono);
+    text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;}
+  .badge.teal{background:rgba(0,212,200,0.1);color:var(--teal);border:1px solid rgba(0,212,200,0.25);}
+  .badge.amber{background:rgba(245,158,11,0.1);color:var(--amber);border:1px solid rgba(245,158,11,0.25);}
+  .badge.red{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid rgba(239,68,68,0.25);}
+  .badge.green{background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.25);}
+  .badge.purple{background:rgba(124,58,237,0.1);color:#a78bfa;border:1px solid rgba(124,58,237,0.25);}
+
+  /* WIREFRAME TABS */
+  .tab-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:1.25rem;}
+  .tab-btn{padding:6px 16px;border-radius:20px;border:1px solid var(--card-border);
+    background:transparent;color:var(--mist);font-family:var(--font-main);font-size:0.82rem;
+    cursor:pointer;transition:all .15s;}
+  .tab-btn.active{background:var(--teal);color:var(--navy);border-color:var(--teal);font-weight:600;}
+  .tab-btn:hover:not(.active){border-color:rgba(0,212,200,0.35);color:var(--pale);}
+  .wf-pane{display:none;} .wf-pane.active{display:block;}
+
+  /* SCREEN FRAMES */
+  .screen-frame{background:var(--card-bg);border:1px solid var(--card-border);
+    border-radius:var(--radius);overflow:hidden;margin-bottom:1rem;}
+  .screen-chrome{background:rgba(10,22,40,0.9);padding:8px 14px;display:flex;align-items:center;gap:8px;
+    border-bottom:1px solid var(--card-border);}
+  .chrome-dot{width:10px;height:10px;border-radius:50%;}
+  .url-bar{flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+    border-radius:5px;padding:3px 10px;font-size:0.72rem;font-family:var(--font-mono);color:var(--mist);}
+  .screen-body{padding:0;}
+
+  /* WIREFRAME GRIDS */
+  .wf-grid{display:grid;gap:1rem;}
+  .wf-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+    border-radius:var(--radius-sm);padding:1rem;}
+  .wf-topbar{background:rgba(10,22,40,0.95);padding:8px 16px;display:flex;align-items:center;gap:16px;
+    border-bottom:1px solid var(--card-border);}
+  .wf-logo{font-family:var(--font-mono);font-size:0.8rem;color:var(--teal);font-weight:700;}
+  .wf-nav a{font-size:0.78rem;color:var(--mist);text-decoration:none;padding:3px 10px;border-radius:4px;}
+  .wf-nav a:hover{color:var(--white);}
+  .wf-nav a.active{color:var(--white);background:rgba(255,255,255,0.07);}
+  .spacer{flex:1;}
+
+  /* ANNOTATION CALLOUTS */
+  .annotation{display:flex;align-items:flex-start;gap:10px;padding:0.6rem 0.9rem;
+    background:rgba(0,212,200,0.05);border-left:3px solid rgba(0,212,200,0.35);
+    border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin:0.5rem 0;font-size:0.82rem;color:var(--pale);}
+  .annotation .label{color:var(--teal);font-weight:600;white-space:nowrap;margin-right:2px;}
+
+  /* SCREEN LAYOUT MOCKUPS */
+  .screen-page{padding:16px;display:flex;flex-direction:column;gap:12px;min-height:200px;}
+  .page-header-row{display:flex;justify-content:space-between;align-items:flex-start;}
+  .page-h1{font-size:0.95rem;font-weight:600;color:var(--white);}
+  .page-sub{font-size:0.72rem;color:var(--mist);}
+  .metric-row{display:grid;gap:8px;}
+  .metric-box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);
+    border-radius:6px;padding:8px 10px;}
+  .metric-val{font-size:1.2rem;font-family:var(--font-mono);font-weight:700;color:var(--white);}
+  .metric-lbl{font-size:0.65rem;color:var(--mist);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;}
+  .heatmap-placeholder{background:rgba(0,0,0,0.3);border-radius:8px;aspect-ratio:1;
+    display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--mist);
+    background-image:radial-gradient(ellipse 40% 35% at 38% 68%,rgba(239,68,68,0.6) 0%,transparent 70%),
+      radial-gradient(ellipse 35% 30% at 65% 68%,rgba(245,158,11,0.5) 0%,transparent 70%),
+      radial-gradient(ellipse 60% 20% at 50% 48%,rgba(59,130,246,0.25) 0%,transparent 70%);}
+  .field-box{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);
+    border-radius:6px;padding:7px 10px;font-size:0.78rem;color:var(--fog);}
+  .btn-mock{display:inline-block;padding:6px 14px;border-radius:6px;font-size:0.78rem;font-weight:600;}
+  .btn-primary-mock{background:var(--teal);color:var(--navy);}
+  .btn-secondary-mock{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:var(--pale);}
+  .alert-mock{padding:7px 10px;border-radius:6px;border-left:3px solid var(--red);
+    background:rgba(239,68,68,0.08);font-size:0.78rem;color:#fca5a5;}
+  .comment-mock{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);
+    border-radius:6px;padding:8px 10px;}
+  .comment-author-patient{font-size:0.72rem;font-weight:600;color:var(--teal);}
+  .comment-author-clinician{font-size:0.72rem;font-weight:600;color:var(--amber);}
+  .comment-text{font-size:0.78rem;color:var(--pale);margin-top:2px;}
+  .risk-bar{height:8px;border-radius:4px;background:rgba(255,255,255,0.07);overflow:hidden;margin:4px 0;}
+  .risk-seg-low{height:100%;background:var(--green);float:left;}
+  .risk-seg-moderate{height:100%;background:var(--amber);float:left;}
+  .risk-seg-high{height:100%;background:var(--red);float:left;}
+  .risk-seg-critical{height:100%;background:var(--purple);float:left;}
+  .session-row-mock{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+    border-radius:6px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;}
+
+  /* DB TABLE */
+  .db-section{margin-bottom:2rem;}
+  .db-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;}
+  .db-table{background:var(--card-bg);border:1px solid var(--card-border);border-radius:var(--radius);overflow:hidden;}
+  .db-table-header{background:rgba(0,212,200,0.1);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(0,212,200,0.15);}
+  .db-table-name{font-family:var(--font-mono);font-size:0.82rem;font-weight:700;color:var(--teal);}
+  .db-table-app{font-size:0.68rem;color:var(--mist);font-family:var(--font-mono);}
+  .db-field{display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.78rem;}
+  .db-field:last-child{border:none;}
+  .db-field:hover{background:rgba(255,255,255,0.02);}
+  .field-name{color:var(--pale);font-family:var(--font-mono);flex:1;}
+  .field-type{color:var(--mist);font-size:0.7rem;font-family:var(--font-mono);white-space:nowrap;}
+  .field-pk{color:var(--amber);font-size:0.65rem;font-family:var(--font-mono);border:1px solid rgba(245,158,11,0.3);padding:1px 5px;border-radius:4px;}
+  .field-fk{color:var(--teal);font-size:0.65rem;font-family:var(--font-mono);border:1px solid rgba(0,212,200,0.3);padding:1px 5px;border-radius:4px;}
+
+  /* RELATIONSHIPS */
+  .rel-table{width:100%;border-collapse:collapse;font-size:0.82rem;margin-bottom:1rem;}
+  .rel-table th{text-align:left;font-size:0.7rem;font-family:var(--font-mono);color:var(--mist);
+    text-transform:uppercase;letter-spacing:0.06em;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .rel-table td{padding:8px 12px;color:var(--pale);border-bottom:1px solid rgba(255,255,255,0.04);}
+  .rel-table tr:last-child td{border:none;}
+  .rel-table td:nth-child(2){font-family:var(--font-mono);font-size:0.75rem;color:var(--teal);}
+  .rel-table td:nth-child(3){font-family:var(--font-mono);font-size:0.75rem;color:var(--mist);}
+
+  code{background:rgba(0,212,200,0.08);border:1px solid rgba(0,212,200,0.15);
+    border-radius:4px;padding:1px 6px;font-family:var(--font-mono);font-size:0.78rem;color:var(--teal);}
+
+  hr{border:none;border-top:1px solid rgba(255,255,255,0.06);margin:2.5rem 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <h1>Sensore — Design Documentation</h1>
+  <p class="subtitle">Wireframes · Database Structure · Component Descriptions<br>
+  Graphene Trace Ltd · Pressure Ulcer Prevention Platform</p>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>Screen Wireframes</h2>
+  <p>Five pages make up the Sensore application. Each wireframe describes the layout, the data source for each component, and the interactions available to the user.</p>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('login',this)">Login</button>
+    <button class="tab-btn" onclick="showTab('patient',this)">Patient Dashboard</button>
+    <button class="tab-btn" onclick="showTab('clinician',this)">Clinician Dashboard</button>
+    <button class="tab-btn" onclick="showTab('report',this)">Report</button>
+    <button class="tab-btn" onclick="showTab('upload',this)">Upload CSV</button>
+  </div>
+
+  <!-- ── LOGIN ── -->
+  <div class="wf-pane active" id="tab-login">
+    <div class="screen-frame">
+      <div class="screen-chrome">
+        <div class="chrome-dot" style="background:#ff5f57"></div>
+        <div class="chrome-dot" style="background:#febc2e"></div>
+        <div class="chrome-dot" style="background:#28c840"></div>
+        <div class="url-bar">127.0.0.1:8000/accounts/login/</div>
+      </div>
+      <div class="screen-body">
+        <div class="wf-topbar" style="justify-content:center">
+          <span class="wf-logo">SENSORE</span>
+        </div>
+        <div style="display:flex;justify-content:center;padding:24px 16px">
+          <div style="width:320px;display:flex;flex-direction:column;gap:12px">
+            <div style="text-align:center;margin-bottom:8px">
+              <div style="width:52px;height:52px;border-radius:12px;background:rgba(0,212,200,0.1);border:1px solid rgba(0,212,200,0.2);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem">🔬</div>
+              <div style="font-size:0.95rem;font-weight:600;color:var(--white)">Sign in to your account</div>
+            </div>
+            <div class="field-box">Username: patient_001</div>
+            <div class="field-box">Password: ••••••••••</div>
+            <div class="btn-mock btn-primary-mock" style="text-align:center">Sign In</div>
+            <div style="border:1px dashed rgba(0,212,200,0.2);border-radius:8px;padding:10px;font-size:0.75rem">
+              <div style="color:var(--teal);margin-bottom:4px;font-family:var(--font-mono);font-size:0.65rem;text-transform:uppercase">Demo Credentials</div>
+              <div style="color:var(--fog)">Patient: patient_001 / patient123</div>
+              <div style="color:var(--fog)">Clinician: dr_smith / clinic123</div>
+              <div style="color:var(--fog)">Admin: admin / admin123</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation"><span class="label">Route:</span> POST /accounts/login/ → Django authenticate() → redirect based on UserProfile.role → /patient/, /clinician/, or /admin/</div>
+    <div class="annotation"><span class="label">Security:</span> CSRF token on form · AUTH_USER_MODEL = auth.User · password hashed with PBKDF2</div>
+  </div>
+
+  <!-- ── PATIENT DASHBOARD ── -->
+  <div class="wf-pane" id="tab-patient">
+    <div class="screen-frame">
+      <div class="screen-chrome">
+        <div class="chrome-dot" style="background:#ff5f57"></div>
+        <div class="chrome-dot" style="background:#febc2e"></div>
+        <div class="chrome-dot" style="background:#28c840"></div>
+        <div class="url-bar">127.0.0.1:8000/patient/</div>
+      </div>
+      <div class="screen-body">
+        <div class="wf-topbar">
+          <span class="wf-logo">SENSORE</span>
+          <div class="wf-nav"><a class="active">Dashboard</a><a>My Report</a><a>Upload Data</a></div>
+          <div class="spacer"></div>
+          <span class="badge teal">patient</span>
+          <span style="font-size:0.78rem;color:var(--fog)">James Wilson</span>
+        </div>
+        <div class="screen-page">
+          <div class="page-header-row">
+            <div><div class="page-h1">My Pressure Dashboard</div><div class="page-sub">Real-time sitting position · Sensore Mat</div></div>
+            <div class="field-box" style="font-size:0.72rem;padding:5px 10px">Session: 2024-01-15 — 09:00 ▾</div>
+          </div>
+          <div class="alert-mock">⚠ High pressure detected (PPI: 2840, Risk: 67/100). Consider repositioning. <span style="float:right;cursor:pointer;color:var(--mist)">Dismiss</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <!-- LEFT -->
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Live Pressure Heatmap <span style="color:var(--green);margin-left:8px">● Live</span></div>
+                <div class="heatmap-placeholder" style="max-width:180px;margin:0 auto"></div>
+                <div style="font-size:0.65rem;color:var(--mist);text-align:center;margin-top:6px">None ▬▬▬▬▬▬▬▬▬ Critical</div>
+                <input type="range" style="width:100%;margin-top:6px;accent-color:var(--teal)" value="75" readonly/>
+                <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--mist)"><span>09:00</span><span>Frame 45</span><span>11:00</span></div>
+              </div>
+              <div class="wf-card" style="padding:10px">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Risk Score Over Time</div>
+                <div style="height:60px;background:rgba(0,0,0,0.2);border-radius:4px;display:flex;align-items:flex-end;padding:4px;gap:2px">
+                  <div style="flex:1;background:rgba(0,212,200,0.4);height:30%"></div>
+                  <div style="flex:1;background:rgba(0,212,200,0.4);height:45%"></div>
+                  <div style="flex:1;background:rgba(245,158,11,0.5);height:55%"></div>
+                  <div style="flex:1;background:rgba(239,68,68,0.6);height:70%"></div>
+                  <div style="flex:1;background:rgba(239,68,68,0.6);height:80%"></div>
+                  <div style="flex:1;background:rgba(239,68,68,0.6);height:75%"></div>
+                  <div style="flex:1;background:rgba(245,158,11,0.5);height:60%"></div>
+                  <div style="flex:1;background:rgba(0,212,200,0.4);height:40%"></div>
+                </div>
+              </div>
+            </div>
+            <!-- RIGHT -->
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="wf-card">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em">Current Metrics</span>
+                  <span class="badge red" style="padding:2px 8px">High Risk</span>
+                </div>
+                <div class="metric-row" style="grid-template-columns:1fr 1fr">
+                  <div class="metric-box"><div class="metric-lbl">Peak Pressure Index</div><div class="metric-val" style="color:var(--red)">2840</div><div style="font-size:0.65rem;color:var(--mist)">/&nbsp;4095 max</div></div>
+                  <div class="metric-box"><div class="metric-lbl">Contact Area</div><div class="metric-val">38%</div><div style="font-size:0.65rem;color:var(--mist)">of mat surface</div></div>
+                  <div class="metric-box"><div class="metric-lbl">Risk Score</div><div class="metric-val" style="color:var(--red)">67</div><div style="font-size:0.65rem;color:var(--mist)">/&nbsp;100</div></div>
+                  <div class="metric-box"><div class="metric-lbl">Asymmetry</div><div class="metric-val" style="color:var(--amber)">31%</div><div style="font-size:0.65rem;color:var(--mist)">left/right imbalance</div></div>
+                </div>
+              </div>
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">What This Means</div>
+                <div style="background:rgba(0,212,200,0.05);border:1px solid rgba(0,212,200,0.12);border-radius:6px;padding:8px;font-size:0.78rem;color:var(--pale);line-height:1.6">
+                  Your peak pressure is quite high (69% of max). This level of pressure over time can affect circulation. 38% of the mat is in contact.<br><br>
+                  <span style="color:var(--red)">🔴 Consider repositioning soon and let your clinician know.</span>
+                </div>
+              </div>
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">My Notes</div>
+                <div class="field-box" style="margin-bottom:6px;color:var(--mist)">Add a note about your current position...</div>
+                <div class="btn-mock btn-primary-mock" style="font-size:0.75rem;padding:5px 12px;margin-bottom:8px">Add Note</div>
+                <div class="comment-mock" style="margin-bottom:4px"><div class="comment-author-patient">James Wilson <span style="color:var(--mist);font-weight:400">(patient)</span></div><div class="comment-text">Shifted position after feeling uncomfortable on right side</div></div>
+                <div class="comment-mock" style="padding-left:16px;border-left:2px solid rgba(245,158,11,0.3)"><div class="comment-author-clinician">Dr. Sarah Smith <span style="color:var(--mist);font-weight:400">(clinician)</span></div><div class="comment-text">Good — aim to reposition every 30 minutes</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation"><span class="label">US1 — Heatmap:</span> Canvas 32×32 ImageData API. Colour ramp: navy→blue→cyan→gold→red. Auto-polls GET /api/session/&lt;id&gt;/latest/ every 30 s. Hot-zone rings overlaid via absolute-positioned divs.</div>
+    <div class="annotation"><span class="label">US2 — Plain English:</span> utils.generate_plain_english() produces 4-paragraph explanation stored in PressureMetrics.plain_english. Loaded per-frame from API response.</div>
+    <div class="annotation"><span class="label">US3 — Comments:</span> POST /api/session/&lt;id&gt;/comment/ with {text, frame_id, timestamp}. Replies fetched via GET /api/session/&lt;id&gt;/comments/ and rendered threaded.</div>
+  </div>
+
+  <!-- ── CLINICIAN DASHBOARD ── -->
+  <div class="wf-pane" id="tab-clinician">
+    <div class="screen-frame">
+      <div class="screen-chrome">
+        <div class="chrome-dot" style="background:#ff5f57"></div>
+        <div class="chrome-dot" style="background:#febc2e"></div>
+        <div class="chrome-dot" style="background:#28c840"></div>
+        <div class="url-bar">127.0.0.1:8000/clinician/</div>
+      </div>
+      <div class="screen-body">
+        <div class="wf-topbar">
+          <span class="wf-logo">SENSORE</span>
+          <div class="wf-nav"><a class="active">Dashboard</a><a>Upload Data</a></div>
+          <div class="spacer"></div>
+          <span class="badge amber">clinician</span>
+          <span style="font-size:0.78rem;color:var(--fog)">Dr. Sarah Smith</span>
+        </div>
+        <div class="screen-page">
+          <div><div class="page-h1">Clinician Dashboard</div><div class="page-sub">Patient pressure risk overview</div></div>
+          <!-- stat row -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Patients</div><div class="metric-val" style="color:var(--teal)">5</div></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Active Alerts</div><div class="metric-val" style="color:var(--red)">8</div></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">High Risk Now</div><div class="metric-val" style="color:var(--red)">2</div></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Low Risk</div><div class="metric-val" style="color:var(--green)">2</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+            <!-- patient cards -->
+            <div>
+              <div style="font-size:0.65rem;color:var(--mist);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">My Patients</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <div class="wf-card" style="border-color:rgba(239,68,68,0.4);cursor:pointer">
+                  <div style="font-weight:600;font-size:0.82rem">James Wilson</div>
+                  <div style="font-size:0.65rem;color:var(--mist);margin-bottom:4px">PATIENT_001</div>
+                  <div style="font-size:0.72rem;color:var(--fog)">📅 2024-01-15</div>
+                  <div style="display:flex;gap:4px;margin-top:6px">
+                    <span class="badge red" style="padding:1px 6px;font-size:0.6rem">⚠ 3 alerts</span>
+                    <span class="badge red" style="padding:1px 6px;font-size:0.6rem">High Risk</span>
+                  </div>
+                </div>
+                <div class="wf-card" style="cursor:pointer">
+                  <div style="font-weight:600;font-size:0.82rem">Maria Chen</div>
+                  <div style="font-size:0.65rem;color:var(--mist);margin-bottom:4px">PATIENT_002</div>
+                  <div style="font-size:0.72rem;color:var(--fog)">📅 2024-01-15</div>
+                  <div style="margin-top:6px"><span class="badge amber" style="padding:1px 6px;font-size:0.6rem">Moderate Risk</span></div>
+                </div>
+                <div class="wf-card" style="cursor:pointer">
+                  <div style="font-weight:600;font-size:0.82rem">Robert Taylor</div>
+                  <div style="font-size:0.65rem;color:var(--mist);margin-bottom:4px">PATIENT_003</div>
+                  <div style="margin-top:6px"><span class="badge green" style="padding:1px 6px;font-size:0.6rem">Low Risk</span></div>
+                </div>
+                <div class="wf-card" style="cursor:pointer">
+                  <div style="font-weight:600;font-size:0.82rem">Agnes Okafor</div>
+                  <div style="font-size:0.65rem;color:var(--mist);margin-bottom:4px">PATIENT_004</div>
+                  <div style="margin-top:6px"><span class="badge green" style="padding:1px 6px;font-size:0.6rem">Low Risk</span></div>
+                </div>
+              </div>
+            </div>
+            <!-- alerts table -->
+            <div class="wf-card">
+              <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Active Alerts</div>
+              <table style="width:100%;border-collapse:collapse;font-size:0.75rem">
+                <thead><tr style="color:var(--mist);border-bottom:1px solid rgba(255,255,255,0.08)">
+                  <th style="text-align:left;padding:4px 6px;font-weight:400">Patient</th>
+                  <th style="text-align:left;padding:4px 6px;font-weight:400">Alert</th>
+                  <th style="padding:4px 6px;font-weight:400">Risk</th>
+                  <th style="padding:4px 6px;font-weight:400"></th>
+                </tr></thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+                    <td style="padding:6px;color:var(--pale)">J. Wilson</td>
+                    <td style="padding:6px;color:var(--fog)">High PPI detected</td>
+                    <td style="padding:6px;text-align:center"><span class="badge red" style="padding:1px 6px;font-size:0.6rem">67</span></td>
+                    <td style="padding:6px;text-align:center;color:var(--teal);cursor:pointer">✓</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+                    <td style="padding:6px;color:var(--pale)">J. Wilson</td>
+                    <td style="padding:6px;color:var(--fog)">Sustained pressure</td>
+                    <td style="padding:6px;text-align:center"><span class="badge red" style="padding:1px 6px;font-size:0.6rem">72</span></td>
+                    <td style="padding:6px;text-align:center;color:var(--teal);cursor:pointer">✓</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px;color:var(--pale)">M. Chen</td>
+                    <td style="padding:6px;color:var(--fog)">Significant asymmetry</td>
+                    <td style="padding:6px;text-align:center"><span class="badge amber" style="padding:1px 6px;font-size:0.6rem">44</span></td>
+                    <td style="padding:6px;text-align:center;color:var(--teal);cursor:pointer">✓</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- detail panel (shown after click) -->
+          <div class="wf-card" style="border-color:rgba(0,212,200,0.25)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="color:var(--teal);font-weight:600;font-size:0.9rem">James Wilson — Session Detail</span>
+              <span class="btn-mock btn-secondary-mock" style="font-size:0.72rem;padding:3px 10px;cursor:pointer">Close ×</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <div class="heatmap-placeholder" style="width:100px;height:100px;margin-bottom:8px"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+                  <div class="metric-box" style="padding:5px 8px"><div class="metric-lbl">PPI</div><div style="font-size:1rem;font-family:var(--font-mono);color:var(--red)">2840</div></div>
+                  <div class="metric-box" style="padding:5px 8px"><div class="metric-lbl">Risk</div><div style="font-size:1rem;font-family:var(--font-mono);color:var(--red)">67</div></div>
+                </div>
+                <div style="margin-top:6px;display:flex;gap:6px">
+                  <span class="btn-mock btn-secondary-mock" style="font-size:0.7rem;padding:4px 8px">📄 Report</span>
+                  <span class="btn-mock btn-primary-mock" style="font-size:0.7rem;padding:4px 8px">⬇ PDF</span>
+                </div>
+              </div>
+              <div>
+                <div style="font-size:0.65rem;color:var(--mist);font-family:var(--font-mono);text-transform:uppercase;margin-bottom:6px">Patient Notes &amp; Replies</div>
+                <div class="comment-mock" style="margin-bottom:4px">
+                  <div class="comment-author-patient">James Wilson</div>
+                  <div class="comment-text">Shifted position after feeling uncomfortable</div>
+                  <div style="display:flex;gap:4px;margin-top:6px">
+                    <div class="field-box" style="flex:1;padding:4px 8px;font-size:0.72rem;color:var(--mist)">Reply as clinician...</div>
+                    <span class="btn-mock btn-primary-mock" style="font-size:0.7rem;padding:4px 10px">Reply</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation"><span class="label">US5 — Auto risk:</span> PressureMetrics.risk_level computed by utils.calculate_risk_score() on every frame. Clinician sees risk badges without any manual input. Alerts auto-created for high/critical frames by load_sample_data and csv_upload.</div>
+    <div class="annotation"><span class="label">Reply threads:</span> POST /api/comment/&lt;id&gt;/reply/ creates Comment with is_reply=True and reply_to FK. Displayed inline beneath parent comment.</div>
+    <div class="annotation"><span class="label">Session flag:</span> POST /api/session/&lt;id&gt;/flag/ toggles SensorSession.flagged_for_review. Appears in report and in the session table.</div>
+  </div>
+
+  <!-- ── REPORT ── -->
+  <div class="wf-pane" id="tab-report">
+    <div class="screen-frame">
+      <div class="screen-chrome">
+        <div class="chrome-dot" style="background:#ff5f57"></div>
+        <div class="chrome-dot" style="background:#febc2e"></div>
+        <div class="chrome-dot" style="background:#28c840"></div>
+        <div class="url-bar">127.0.0.1:8000/report/ &nbsp;|&nbsp; ?download=1 → PDF</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-page">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="page-h1">Medical History Report</div>
+              <div class="page-sub">James Wilson · Generated: 15 Jan 2024, 14:32 UTC · PATIENT_001</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <span class="btn-mock btn-primary-mock" style="font-size:0.78rem">⬇ Download PDF</span>
+              <span class="btn-mock btn-secondary-mock" style="font-size:0.78rem">🖨 Print</span>
+            </div>
+          </div>
+          <!-- summary cards -->
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Overall Risk</div><span class="badge amber">Moderate</span></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Avg PPI</div><div class="metric-val">1842</div><div style="font-size:0.65rem;color:var(--mist)">/&nbsp;4095</div></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Avg Contact</div><div class="metric-val">42%</div></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">Avg Risk Score</div><div class="metric-val">38</div><div style="font-size:0.65rem;color:var(--mist)">/&nbsp;100</div></div>
+            <div class="metric-box" style="text-align:center"><div class="metric-lbl">High Risk Events</div><div class="metric-val" style="color:var(--red)">12</div></div>
+          </div>
+          <!-- session rows -->
+          <div style="font-size:0.65rem;color:var(--mist);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em">Session History (3 sessions)</div>
+          <!-- row 1 expanded -->
+          <div style="border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden">
+            <div style="padding:8px 12px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,212,200,0.04);border-bottom:1px solid rgba(0,212,200,0.08);cursor:pointer">
+              <div>
+                <div style="font-weight:600;font-size:0.85rem">Monday, 15 January 2024</div>
+                <div style="font-size:0.7rem;color:var(--mist)">09:00–11:00 · 60 frames</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div style="text-align:center"><div style="font-size:0.65rem;color:var(--mist)">Avg PPI</div><div style="font-weight:600;font-size:0.82rem">1842</div></div>
+                <div style="text-align:center"><div style="font-size:0.65rem;color:var(--mist)">Contact</div><div style="font-weight:600;font-size:0.82rem">42%</div></div>
+                <span class="badge amber">Moderate</span>
+                <span style="color:var(--mist)">▴</span>
+              </div>
+            </div>
+            <div style="padding:10px 12px">
+              <div style="font-size:0.72rem;color:var(--mist);margin-bottom:4px">Risk distribution across 60 frames</div>
+              <div class="risk-bar">
+                <div class="risk-seg-low" style="width:60%"></div>
+                <div class="risk-seg-moderate" style="width:27%"></div>
+                <div class="risk-seg-high" style="width:10%"></div>
+                <div class="risk-seg-critical" style="width:3%"></div>
+              </div>
+              <div style="display:flex;gap:12px;font-size:0.7rem;margin-bottom:8px">
+                <span style="color:var(--green)">Low: 36</span>
+                <span style="color:var(--amber)">Moderate: 16</span>
+                <span style="color:var(--red)">High: 6</span>
+                <span style="color:var(--purple)">Critical: 2</span>
+              </div>
+              <div class="comment-mock"><div class="comment-author-patient">James Wilson <span style="color:var(--mist);font-weight:400;font-size:0.7rem">· 09:28</span></div><div class="comment-text">Shifted position after feeling uncomfortable on my right side</div></div>
+            </div>
+          </div>
+          <div class="session-row-mock">
+            <div><div style="font-weight:600;font-size:0.85rem">Friday, 12 January 2024</div><div style="font-size:0.7rem;color:var(--mist)">09:00–11:00 · 60 frames</div></div>
+            <div style="display:flex;align-items:center;gap:8px"><span class="badge green">Low Risk</span><span style="color:var(--mist)">▾</span></div>
+          </div>
+          <div class="session-row-mock">
+            <div><div style="font-weight:600;font-size:0.85rem">Tuesday, 09 January 2024</div><div style="font-size:0.7rem;color:var(--mist)">09:00–11:00 · 60 frames</div></div>
+            <div style="display:flex;align-items:center;gap:8px"><span class="badge amber">Moderate Risk</span><span style="color:var(--mist)">▾</span></div>
+          </div>
+          <div style="background:rgba(0,212,200,0.04);border:1px solid rgba(0,212,200,0.12);border-radius:6px;padding:8px 12px;font-size:0.75rem;color:var(--mist)">
+            <strong style="color:var(--pale)">Clinical Disclaimer:</strong> This report is automatically generated by the Sensore platform and is not a substitute for professional medical advice.
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation"><span class="label">US4 — Download PDF:</span> ?download=1 calls generate_pdf_report() using ReportLab. Streams as application/pdf with Content-Disposition: attachment. Includes all sessions, metrics table, and patient notes.</div>
+    <div class="annotation"><span class="label">Risk distribution bar:</span> Django widthratio template tag computes % width for each segment from PressureMetrics.risk_level counts. Bar renders as four float:left divs.</div>
+    <div class="annotation"><span class="label">Clinician access:</span> /report/&lt;patient_id&gt;/ available to clinician/admin roles. Patient accesses own report at /report/.</div>
+  </div>
+
+  <!-- ── UPLOAD CSV ── -->
+  <div class="wf-pane" id="tab-upload">
+    <div class="screen-frame">
+      <div class="screen-chrome">
+        <div class="chrome-dot" style="background:#ff5f57"></div>
+        <div class="chrome-dot" style="background:#febc2e"></div>
+        <div class="chrome-dot" style="background:#28c840"></div>
+        <div class="url-bar">127.0.0.1:8000/upload/</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-page">
+          <div><div class="page-h1">Upload Sensor Data</div><div class="page-sub">Import pressure data from a Sensore mat CSV file</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Import CSV File</div>
+                <div style="border:1px dashed rgba(0,212,200,0.35);border-radius:8px;padding:16px;text-align:center;margin-bottom:8px">
+                  <div style="font-size:1.5rem;margin-bottom:4px">📂</div>
+                  <div style="font-size:0.82rem;font-weight:600">Drop your CSV file here</div>
+                  <div style="font-size:0.72rem;color:var(--mist)">or click to browse · .csv files only</div>
+                  <div style="font-size:0.78rem;color:var(--teal);margin-top:6px">📄 patient_001_normal.csv</div>
+                </div>
+                <div style="height:4px;background:rgba(255,255,255,0.07);border-radius:2px;margin-bottom:10px;overflow:hidden">
+                  <div style="height:100%;width:65%;background:var(--teal);border-radius:2px"></div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+                  <div><div style="font-size:0.65rem;color:var(--mist);margin-bottom:3px">SESSION DATE</div><div class="field-box" style="font-size:0.78rem">2024-01-15</div></div>
+                  <div><div style="font-size:0.65rem;color:var(--mist);margin-bottom:3px">NOTES</div><div class="field-box" style="font-size:0.78rem">Morning session</div></div>
+                </div>
+                <div class="btn-mock btn-primary-mock" style="text-align:center;font-size:0.82rem">⬆ Upload &amp; Analyse</div>
+              </div>
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Expected CSV Format</div>
+                <div style="font-size:0.78rem;color:var(--pale);margin-bottom:4px"><strong>Format A</strong> — 32 rows × 32 cols per frame</div>
+                <div style="background:rgba(0,0,0,0.3);border-radius:5px;padding:6px 8px;font-size:0.7rem;font-family:var(--font-mono);color:var(--teal);margin-bottom:8px">1,1,204,512,...  ← row 1 of frame 1<br>...32 rows total per frame</div>
+                <div style="font-size:0.78rem;color:var(--pale)"><strong>Format B</strong> — 1024 values per row (one frame per row)</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">File Preview</div>
+                <div class="heatmap-placeholder" style="width:140px;height:140px;margin:0 auto 10px"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                  <div class="metric-box" style="padding:5px"><div class="metric-lbl">Est. Frames</div><div style="font-size:1rem;font-family:var(--font-mono);font-weight:700;color:var(--white)">60</div></div>
+                  <div class="metric-box" style="padding:5px"><div class="metric-lbl">File Size</div><div style="font-size:1rem;font-family:var(--font-mono);font-weight:700;color:var(--white)">84 KB</div></div>
+                  <div class="metric-box" style="padding:5px"><div class="metric-lbl">Max Value</div><div style="font-size:1rem;font-family:var(--font-mono);font-weight:700;color:var(--white)">3841</div></div>
+                </div>
+              </div>
+              <div class="wf-card">
+                <div style="font-size:0.65rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">After Upload</div>
+                <div style="font-size:0.82rem;color:var(--pale);margin-bottom:8px">After uploading, your data will appear on your dashboard with full PPI, Contact Area, Asymmetry and Risk analysis automatically applied to every frame.</div>
+                <span class="btn-mock btn-secondary-mock" style="font-size:0.78rem">Go to Dashboard →</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annotation"><span class="label">Browser-side parse:</span> FileReader reads CSV text, detects format (32-col rows vs 1024-col rows), renders first frame on canvas preview, counts frames and estimates session duration — all before upload.</div>
+    <div class="annotation"><span class="label">Server-side (csv_upload.py):</span> parse_sensore_csv() handles both formats → SensorFrame.objects.bulk_create() → analyse_frame() per frame → PressureMetrics saved. POST redirects to /patient/ on success.</div>
+    <div class="annotation"><span class="label">Sample CSV:</span> Sample CSV button runs in-browser JS to generate a 3-frame realistic sitting pattern and trigger a download — no server call needed.</div>
+  </div>
+
+  <hr/>
+
+  <!-- ─────────────────────────────────────────────── -->
+  <h2>Database Structure</h2>
+  <p>The Sensore data model consists of 8 tables across two Django apps. <code>auth_User</code> is Django's built-in model extended by a OneToOne <code>UserProfile</code>.</p>
+
+  <div class="db-section">
+    <h3>accounts app</h3>
+    <div class="db-tables">
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">auth_User</span>
+          <span class="db-table-app">django.contrib.auth</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-name">username</span><span class="field-type">varchar(150) UNIQUE</span></div>
+        <div class="db-field"><span class="field-name">email</span><span class="field-type">varchar(254)</span></div>
+        <div class="db-field"><span class="field-name">first_name</span><span class="field-type">varchar(150)</span></div>
+        <div class="db-field"><span class="field-name">last_name</span><span class="field-type">varchar(150)</span></div>
+        <div class="db-field"><span class="field-name">password</span><span class="field-type">varchar(128) hashed</span></div>
+        <div class="db-field"><span class="field-name">is_staff</span><span class="field-type">bool</span></div>
+        <div class="db-field"><span class="field-name">is_superuser</span><span class="field-type">bool</span></div>
+        <div class="db-field"><span class="field-name">date_joined</span><span class="field-type">datetime</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">accounts_userprofile</span>
+          <span class="db-table-app">accounts</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">user_id</span><span class="field-type">→ auth_user.id OneToOne</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">assigned_clinician_id</span><span class="field-type">→ auth_user.id nullable</span></div>
+        <div class="db-field"><span class="field-name">role</span><span class="field-type">varchar(20) patient|clinician|admin</span></div>
+        <div class="db-field"><span class="field-name">patient_id</span><span class="field-type">varchar(50) UNIQUE nullable</span></div>
+        <div class="db-field"><span class="field-name">date_of_birth</span><span class="field-type">date nullable</span></div>
+        <div class="db-field"><span class="field-name">medical_notes</span><span class="field-type">text</span></div>
+        <div class="db-field"><span class="field-name">created_at</span><span class="field-type">datetime auto_now_add</span></div>
+      </div>
+
+    </div>
+
+    <h3>sensore app</h3>
+    <div class="db-tables">
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">sensore_sensorsession</span>
+          <span class="db-table-app">sensore</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">patient_id</span><span class="field-type">→ auth_user.id CASCADE</span></div>
+        <div class="db-field"><span class="field-name">session_date</span><span class="field-type">date</span></div>
+        <div class="db-field"><span class="field-name">start_time</span><span class="field-type">datetime</span></div>
+        <div class="db-field"><span class="field-name">end_time</span><span class="field-type">datetime nullable</span></div>
+        <div class="db-field"><span class="field-name">notes</span><span class="field-type">text</span></div>
+        <div class="db-field"><span class="field-name">flagged_for_review</span><span class="field-type">bool default=False</span></div>
+        <div class="db-field"><span class="field-name">created_at</span><span class="field-type">datetime auto_now_add</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">sensore_sensorframe</span>
+          <span class="db-table-app">sensore</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">session_id</span><span class="field-type">→ sensorsession.id CASCADE</span></div>
+        <div class="db-field"><span class="field-name">timestamp</span><span class="field-type">datetime</span></div>
+        <div class="db-field"><span class="field-name">frame_index</span><span class="field-type">PositiveInteger</span></div>
+        <div class="db-field"><span class="field-name">data</span><span class="field-type">text — JSON [1024 ints] 32×32</span></div>
+        <div style="padding:6px 14px;font-size:0.7rem;color:var(--mist);border-top:1px solid rgba(255,255,255,0.04)">UNIQUE(session_id, frame_index)</div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">sensore_pressuremetrics</span>
+          <span class="db-table-app">sensore</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">frame_id</span><span class="field-type">→ sensorframe.id OneToOne</span></div>
+        <div class="db-field"><span class="field-name">peak_pressure_index</span><span class="field-type">float — excl. zones &lt;10px</span></div>
+        <div class="db-field"><span class="field-name">contact_area_percent</span><span class="field-type">float — % pixels &gt; threshold</span></div>
+        <div class="db-field"><span class="field-name">average_pressure</span><span class="field-type">float</span></div>
+        <div class="db-field"><span class="field-name">asymmetry_score</span><span class="field-type">float 0–100</span></div>
+        <div class="db-field"><span class="field-name">risk_level</span><span class="field-type">varchar(20) low|moderate|high|critical</span></div>
+        <div class="db-field"><span class="field-name">risk_score</span><span class="field-type">float 0–100</span></div>
+        <div class="db-field"><span class="field-name">hot_zones</span><span class="field-type">text — JSON [{x,y,value}×5]</span></div>
+        <div class="db-field"><span class="field-name">plain_english</span><span class="field-type">text — generated explanation</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">sensore_comment</span>
+          <span class="db-table-app">sensore</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">session_id</span><span class="field-type">→ sensorsession.id CASCADE</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">author_id</span><span class="field-type">→ auth_user.id CASCADE</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">frame_id</span><span class="field-type">→ sensorframe.id nullable</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">reply_to_id</span><span class="field-type">→ comment.id nullable (self)</span></div>
+        <div class="db-field"><span class="field-name">author_type</span><span class="field-type">varchar(20) patient|clinician</span></div>
+        <div class="db-field"><span class="field-name">timestamp_reference</span><span class="field-type">datetime — frame time</span></div>
+        <div class="db-field"><span class="field-name">text</span><span class="field-type">text</span></div>
+        <div class="db-field"><span class="field-name">is_reply</span><span class="field-type">bool</span></div>
+        <div class="db-field"><span class="field-name">created_at</span><span class="field-type">datetime auto_now_add</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">sensore_pressurealert</span>
+          <span class="db-table-app">sensore</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">session_id</span><span class="field-type">→ sensorsession.id CASCADE</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">frame_id</span><span class="field-type">→ sensorframe.id nullable</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">acknowledged_by_id</span><span class="field-type">→ auth_user.id nullable</span></div>
+        <div class="db-field"><span class="field-name">alert_type</span><span class="field-type">varchar(30) high_ppi|sustained|asymmetry|critical</span></div>
+        <div class="db-field"><span class="field-name">message</span><span class="field-type">text</span></div>
+        <div class="db-field"><span class="field-name">risk_score</span><span class="field-type">float — at time of alert</span></div>
+        <div class="db-field"><span class="field-name">acknowledged</span><span class="field-type">bool default=False</span></div>
+        <div class="db-field"><span class="field-name">created_at</span><span class="field-type">datetime auto_now_add</span></div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-header">
+          <span class="db-table-name">sensore_report</span>
+          <span class="db-table-app">sensore</span>
+        </div>
+        <div class="db-field"><span class="field-pk">PK</span><span class="field-name">id</span><span class="field-type">AutoField</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">patient_id</span><span class="field-type">→ auth_user.id CASCADE</span></div>
+        <div class="db-field"><span class="field-fk">FK</span><span class="field-name">generated_by_id</span><span class="field-type">→ auth_user.id nullable</span></div>
+        <div class="db-field"><span class="field-name">title</span><span class="field-type">varchar(200)</span></div>
+        <div class="db-field"><span class="field-name">date_range_start / end</span><span class="field-type">date</span></div>
+        <div class="db-field"><span class="field-name">avg_ppi</span><span class="field-type">float</span></div>
+        <div class="db-field"><span class="field-name">avg_contact_area</span><span class="field-type">float</span></div>
+        <div class="db-field"><span class="field-name">total_high_risk_events</span><span class="field-type">int</span></div>
+        <div class="db-field"><span class="field-name">peak_risk_level</span><span class="field-type">varchar(20)</span></div>
+        <div class="db-field"><span class="field-name">sessions_included</span><span class="field-type">ManyToMany → sensorsession</span></div>
+        <div class="db-field"><span class="field-name">created_at</span><span class="field-type">datetime auto_now_add</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <h3>Relationships</h3>
+  <table class="rel-table">
+    <thead><tr><th>From</th><th>Relation</th><th>To</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>auth_User</td><td>OneToOne →</td><td>UserProfile</td><td>Every user has one profile with a role</td></tr>
+      <tr><td>auth_User (patient)</td><td>1 → Many</td><td>SensorSession</td><td>patient FK on session</td></tr>
+      <tr><td>auth_User (clinician)</td><td>1 → Many</td><td>UserProfile</td><td>assigned_clinician FK links patients to their clinician</td></tr>
+      <tr><td>SensorSession</td><td>1 → Many</td><td>SensorFrame</td><td>session FK on frame, UNIQUE(session, frame_index)</td></tr>
+      <tr><td>SensorFrame</td><td>OneToOne →</td><td>PressureMetrics</td><td>frame FK on metrics, computed by utils.analyse_frame()</td></tr>
+      <tr><td>SensorSession</td><td>1 → Many</td><td>Comment</td><td>comments also optionally reference a specific frame</td></tr>
+      <tr><td>Comment</td><td>self → self</td><td>Comment (reply)</td><td>reply_to FK for threaded clinician replies</td></tr>
+      <tr><td>SensorSession</td><td>1 → Many</td><td>PressureAlert</td><td>alerts also optionally reference the specific frame that triggered them</td></tr>
+      <tr><td>Report</td><td>M2M</td><td>SensorSession</td><td>a report can span multiple sessions</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Key design decisions</h3>
+  <p><code>SensorFrame.data</code> stores the 32×32 matrix as a flat JSON array of 1024 integers rather than a normalised <code>SensorPixel</code> table. This avoids 1024 rows per frame (900,000 rows for 5 patients × 3 sessions × 60 frames) and keeps reads fast — a single column fetch returns the whole frame.</p>
+  <p><code>PressureMetrics.hot_zones</code> stores the top-5 high-pressure pixel coordinates as a JSON array <code>[{x, y, value}]</code>. These are used to draw the animated ring markers on the heatmap canvas without re-scanning the matrix on the frontend.</p>
+  <p><code>Comment.reply_to</code> is a self-referential FK. The API filters <code>is_reply=False</code> for top-level comments and then fetches replies as a nested list, giving the threaded display without a separate <code>Reply</code> table.</p>
+
+  <hr/>
+  <p style="font-size:0.75rem;color:var(--mist);text-align:center">Sensore · Graphene Trace Ltd · Chelmsford · Design Documentation</p>
+
+</div>
+
+<script>
+function showTab(id, btn) {
+  document.querySelectorAll('.wf-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

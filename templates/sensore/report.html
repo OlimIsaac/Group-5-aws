@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Medical Report — {{ patient.get_full_name|default:patient.username }} — Sensore{% endblock %}
+{% block nav_report %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .report-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap;
+  }
+  .report-id {
+    font-family: var(--font-mono); font-size: 0.72rem;
+    color: var(--mist); letter-spacing: 0.06em;
+    margin-top: 4px;
+  }
+  .report-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+
+  /* SUMMARY CARDS */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .summary-card {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 1rem 1.1rem;
+    text-align: center;
+  }
+  .summary-card .s-val {
+    font-size: 2rem; font-family: var(--font-mono); font-weight: 700;
+    color: var(--white); line-height: 1.1; margin: 4px 0;
+  }
+  .summary-card .s-lbl { font-size: 0.72rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.06em; }
+  .summary-card .s-sub { font-size: 0.75rem; color: var(--fog); margin-top: 2px; }
+
+  /* SESSION ROWS */
+  .session-row {
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: var(--radius); overflow: hidden;
+    margin-bottom: 0.75rem;
+  }
+  .session-row-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.9rem 1.25rem; cursor: pointer;
+    border-bottom: 1px solid transparent;
+    transition: background 0.15s;
+  }
+  .session-row-header:hover { background: rgba(0,212,200,0.04); }
+  .session-row-header.open { border-bottom-color: rgba(0,212,200,0.1); }
+  .session-date { font-weight: 600; font-size: 0.95rem; color: var(--white); }
+  .session-meta { font-size: 0.78rem; color: var(--fog); margin-top: 2px; }
+  .session-metrics-row { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+  .session-m { text-align: center; }
+  .session-m .v { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; color: var(--pale); }
+  .session-m .l { font-size: 0.65rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.05em; }
+  .session-detail { display: none; padding: 1.1rem 1.25rem; }
+  .session-detail.open { display: block; }
+
+  /* RISK DIST BAR */
+  .risk-dist-bar {
+    display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+    margin: 0.5rem 0;
+  }
+  .risk-seg { height: 100%; transition: width 0.4s; }
+  .risk-seg.low      { background: var(--green); }
+  .risk-seg.moderate { background: var(--amber); }
+  .risk-seg.high     { background: var(--red); }
+  .risk-seg.critical { background: var(--purple); }
+
+  .risk-dist-legend {
+    display: flex; gap: 1rem; font-size: 0.72rem; color: var(--fog); flex-wrap: wrap;
+  }
+  .risk-dist-legend span { display: flex; align-items: center; gap: 4px; }
+  .risk-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* DISCLAIMER */
+  .disclaimer {
+    margin-top: 2rem; padding: 0.9rem 1.1rem;
+    background: rgba(0,212,200,0.04); border: 1px solid rgba(0,212,200,0.12);
+    border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--mist);
+    line-height: 1.6;
+  }
+
+  @media print {
+    .topbar, .report-actions, .session-row-header::after { display: none !important; }
+    .session-detail { display: block !important; }
+    body { background: white; color: #111; }
+    .card, .session-row, .summary-card { background: white; border-color: #ddd; }
+  }
+  @media (max-width: 800px) {
+    .summary-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 500px) {
+    .summary-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <!-- REPORT HEADER -->
+  <div class="report-header">
+    <div>
+      <div class="page-header" style="margin-bottom:0">
+        <h1>Medical History Report</h1>
+        <p>{{ patient.get_full_name|default:patient.username }}</p>
+      </div>
+      <div class="report-id">
+        Generated: {{ generated_at|date:"d M Y, H:i" }} UTC &nbsp;·&nbsp;
+        {% if patient.profile.patient_id %}Patient ID: {{ patient.profile.patient_id }} &nbsp;·&nbsp; {% endif %}
+        {{ patient.username }}
+      </div>
+    </div>
+    <div class="report-actions">
+      <a href="?download=1" class="btn btn-primary">
+        ⬇ Download PDF
+      </a>
+      <button class="btn btn-secondary" onclick="window.print()">🖨 Print</button>
+    </div>
+  </div>
+
+  <!-- SUMMARY STATS -->
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="s-lbl">Overall Risk</div>
+      <div class="s-val"><span class="risk-badge {{ overall_risk_level }}" style="font-size:0.8rem">{{ overall_risk_level|capfirst }}</span></div>
+      <div class="s-sub">Composite</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-lbl">Avg Peak Pressure</div>
+      <div class="s-val">{{ avg_ppi }}</div>
+      <div class="s-sub">/ 4095</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-lbl">Avg Contact Area</div>
+      <div class="s-val">{{ avg_area }}<span style="font-size:1rem">%</span></div>
+      <div class="s-sub">Of mat surface</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-lbl">Avg Risk Score</div>
+      <div class="s-val">{{ avg_risk }}</div>
+      <div class="s-sub">/ 100</div>
+    </div>
+    <div class="summary-card">
+      <div class="s-lbl">High Risk Events</div>
+      <div class="s-val {% if total_high_risk > 0 %}text-danger{% else %}text-success{% endif %}">{{ total_high_risk }}</div>
+      <div class="s-sub">Across all sessions</div>
+    </div>
+  </div>
+
+  <!-- SESSION HISTORY -->
+  <div class="card-title mb-1" style="font-size:0.78rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">
+    Session History ({{ session_summaries|length }} session{{ session_summaries|pluralize }})
+  </div>
+
+  {% for ss in session_summaries %}
+  {% with d=ss.data s=ss.session %}
+  <div class="session-row">
+    <div class="session-row-header" onclick="toggleSession(this)">
+      <div>
+        <div class="session-date">{{ s.session_date|date:"l, d F Y" }}</div>
+        <div class="session-meta">
+          {{ s.start_time|date:"H:i" }}–{{ s.end_time|date:"H:i"|default:"—" }} &nbsp;·&nbsp;
+          {{ d.frame_count }} frames
+          {% if s.flagged_for_review %} &nbsp;·&nbsp; <span style="color:var(--amber)">⚑ Flagged for review</span>{% endif %}
+        </div>
+      </div>
+      <div class="session-metrics-row">
+        <div class="session-m">
+          <div class="v">{{ d.avg_ppi }}</div>
+          <div class="l">Avg PPI</div>
+        </div>
+        <div class="session-m">
+          <div class="v">{{ d.avg_contact_area }}%</div>
+          <div class="l">Contact</div>
+        </div>
+        <div class="session-m">
+          <div class="v">{{ d.avg_risk_score }}</div>
+          <div class="l">Risk</div>
+        </div>
+        <span class="risk-badge {{ d.peak_risk_level }}">{{ d.peak_risk_level|capfirst }}</span>
+        <span class="text-muted" style="font-size:0.9rem">▾</span>
+      </div>
+    </div>
+
+    <div class="session-detail">
+      <!-- Risk Distribution -->
+      {% with dist=d.risk_distribution total=d.frame_count %}
+      {% if total > 0 %}
+      <div style="margin-bottom:1rem">
+        <div class="metric-label mb-1">Risk distribution across {{ total }} frames</div>
+        <div class="risk-dist-bar">
+          {% if dist.low %}    <div class="risk-seg low"      style="width:{% widthratio dist.low total 100 %}%"></div>{% endif %}
+          {% if dist.moderate %}<div class="risk-seg moderate" style="width:{% widthratio dist.moderate total 100 %}%"></div>{% endif %}
+          {% if dist.high %}   <div class="risk-seg high"     style="width:{% widthratio dist.high total 100 %}%"></div>{% endif %}
+          {% if dist.critical %}<div class="risk-seg critical" style="width:{% widthratio dist.critical total 100 %}%"></div>{% endif %}
+        </div>
+        <div class="risk-dist-legend">
+          <span><div class="risk-dot" style="background:var(--green)"></div> Low: {{ dist.low }}</span>
+          <span><div class="risk-dot" style="background:var(--amber)"></div> Moderate: {{ dist.moderate }}</span>
+          <span><div class="risk-dot" style="background:var(--red)"></div> High: {{ dist.high }}</span>
+          <span><div class="risk-dot" style="background:var(--purple)"></div> Critical: {{ dist.critical }}</span>
+        </div>
+      </div>
+      {% endif %}
+      {% endwith %}
+
+      <!-- Comments for this session -->
+      {% with comments=s.comments.all %}
+      {% if comments %}
+      <div>
+        <div class="metric-label mb-1" style="margin-bottom:0.5rem">Patient Notes ({{ comments.count }})</div>
+        {% for c in comments|slice:":5" %}
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:0.6rem 0.85rem;margin-bottom:0.5rem;font-size:0.83rem">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+            <strong style="color:{% if c.author_type == 'clinician' %}var(--amber){% else %}var(--teal){% endif %}">
+              {{ c.author.get_full_name|default:c.author.username }} ({{ c.author_type }})
+            </strong>
+            <span style="color:var(--mist);font-size:0.72rem;font-family:var(--font-mono)">{{ c.timestamp_reference|date:"H:i, d M" }}</span>
+          </div>
+          <div style="color:var(--pale)">{{ c.text }}</div>
+        </div>
+        {% endfor %}
+        {% if comments.count > 5 %}
+        <div class="text-muted" style="font-size:0.8rem">… and {{ comments.count|add:"-5" }} more</div>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endwith %}
+
+    </div>
+  </div>
+  {% endwith %}
+  {% empty %}
+  <div class="card">
+    <div class="card-body" style="text-align:center;color:var(--mist);padding:2.5rem">
+      No session data available for this patient.
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer">
+    <strong style="color:var(--pale)">Clinical Disclaimer:</strong>
+    This report is automatically generated by the Sensore platform (Graphene Trace Ltd).
+    It is intended as a supplementary tool for clinicians and patients, not as a substitute
+    for professional medical advice, diagnosis or treatment. All pressure readings and risk
+    assessments should be interpreted by a qualified healthcare professional.
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleSession(header) {
+  const detail = header.nextElementSibling;
+  const isOpen = detail.classList.contains('open');
+  header.classList.toggle('open', !isOpen);
+  detail.classList.toggle('open', !isOpen);
+}
+// Open first session by default
+window.addEventListener('load', () => {
+  const first = document.querySelector('.session-row-header');
+  if (first) {
+    first.classList.add('open');
+    first.nextElementSibling.classList.add('open');
+  }
+});
+</script>
+{% endblock %}
