@@ -21,6 +21,7 @@ pip install --upgrade pip -q
 pip install "Django>=4.2,<5.0" numpy pandas reportlab -q
 
 echo [3/7] Applying database migrations...
+python manage.py makemigrations
 python manage.py migrate --no-input
 
 echo [4/7] Loading synthetic demo data (5 patients)...
