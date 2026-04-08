@@ -75,3 +75,4 @@ sensore/
 - Add REST endpoints and authentication tokens
 - Build reporting and prediction logic
 - Styling and responsive layout
+- Styling and responsive layout

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sensore — Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0a1628; --navy-mid: #0f2744; --navy-light: #1a3a5c;
+      --teal: #00d4c8; --pale: #c8daea; --mist: #5a7a9a;
+      --fog: #8fa8be; --white: #f5f9ff; --red: #ef4444;
+      --card-border: rgba(0,212,200,0.12);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--navy);
+      min-height: 100vh;
+      display: grid; place-items: center;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,212,200,0.09) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 10% 90%, rgba(0,168,158,0.06) 0%, transparent 60%);
+    }
+    .login-wrap {
+      width: 100%; max-width: 420px; padding: 1.5rem;
+    }
+    .brand {
+      text-align: center; margin-bottom: 2.5rem;
+    }
+    .brand-logo {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 64px; height: 64px; border-radius: 16px;
+      background: rgba(0,212,200,0.1); border: 1px solid var(--card-border);
+      margin-bottom: 1rem;
+    }
+    .brand h1 {
+      font-family: 'Space Mono', monospace; font-size: 1.4rem;
+      color: var(--teal); letter-spacing: 0.08em; margin-bottom: 4px;
+    }
+    .brand p { font-size: 0.875rem; color: var(--mist); }
+    .card {
+      background: rgba(15, 39, 68, 0.9);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 2rem;
+      backdrop-filter: blur(12px);
+    }
+    .card h2 { font-size: 1.1rem; font-weight: 600; color: var(--white); margin-bottom: 1.5rem; }
+    .form-group { margin-bottom: 1.1rem; }
+    .form-label { display: block; font-size: 0.75rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .form-control {
+      width: 100%; padding: 10px 14px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem; transition: border-color 0.18s;
+    }
+    .form-control:focus { outline: none; border-color: var(--teal); background: rgba(0,212,200,0.05); }
+    .btn-submit {
+      width: 100%; padding: 11px;
+      background: var(--teal); color: var(--navy);
+      border: none; border-radius: 8px; font-family: 'DM Sans', sans-serif;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      transition: background 0.18s, transform 0.12s;
+      margin-top: 0.5rem;
+    }
+    .btn-submit:hover { background: #00f0e2; }
+    .btn-submit:active { transform: scale(0.98); }
+    .error-msg {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px; padding: 10px 14px;
+      color: #fca5a5; font-size: 0.875rem; margin-bottom: 1.2rem;
+    }
+    .demo-creds {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: rgba(0,212,200,0.04);
+      border: 1px dashed rgba(0,212,200,0.2);
+      border-radius: 8px;
+    }
+    .demo-creds h3 { font-size: 0.72rem; color: var(--teal); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6rem; }
+    .cred-row { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 2px 0; }
+    .cred-role { color: var(--fog); }
+    .cred-val  { font-family: 'Space Mono', monospace; color: var(--pale); font-size: 0.75rem; }
+    .footer-note { text-align: center; margin-top: 1.5rem; font-size: 0.75rem; color: var(--mist); }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
+          <path d="M7 14C7 10.134 10.134 7 14 7C17.866 7 21 10.134 21 14" stroke="#00d4c8" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="14" cy="14" r="3" fill="#00d4c8"/>
+          <path d="M14 11V7M11 12.5L7.5 10M17 12.5L20.5 10" stroke="#00d4c8" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1>SENSORE</h1>
+      <p>Graphene Trace — Pressure Ulcer Prevention</p>
+    </div>
+
+    <div class="card">
+      <h2>Sign in to your account</h2>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="error-msg">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control" autocomplete="username" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" class="form-control" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn-submit">Sign In</button>
+      </form>
+
+      <div class="demo-creds">
+        <h3>Demo Credentials</h3>
+        <div class="cred-row"><span class="cred-role">Patient</span><span class="cred-val">patient_001 / patient123</span></div>
+        <div class="cred-row"><span class="cred-role">Clinician</span><span class="cred-val">dr_smith / clinic123</span></div>
+        <div class="cred-row"><span class="cred-role">Admin</span><span class="cred-val">admin / admin123</span></div>
+      </div>
+    </div>
+
+    <p class="footer-note">© Graphene Trace Ltd · Sensore Platform · Chelmsford</p>
+  </div>
+</body>
+</html>

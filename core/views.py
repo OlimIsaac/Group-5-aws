@@ -1,11 +1,25 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import login, logout, authenticate
+from django.http import HttpResponseForbidden, JsonResponse
+from django.contrib import messages
 
-from .forms import CommentForm, AssignmentForm, CustomUserCreationForm, UserForm
+from django.utils import timezone
+from datetime import timedelta
+from collections import defaultdict
 
-from .models import User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment
+from .models import (
+    User, PressureFrame, ClinicianProfile, Assignment,
+    PatientProfile, Comment, PainZoneReport, HeatmapAnnotation, PREDEFINED_ZONES,
+)
+from .forms import (
+    CommentForm, AssignmentForm, UserForm,
+    ClinicianProfileForm, PatientProfileForm,
+    CustomUserCreationForm, PainZoneReportForm,
+)
 
 
 class HomeView(View):
@@ -27,12 +41,132 @@ class HomeView(View):
 class PatientDashboardView(LoginRequiredMixin, View):
     login_url = 'login'
 
-    def get(self, request):
+    def get(self, request, form=None):
         if request.user.role != User.ROLE_PATIENT:
             return redirect('home')
-        frames = PressureFrame.objects.filter(user=request.user).order_by('-timestamp')[:100]
-        comment_form = CommentForm()
-        return render(request, 'core/patient_dashboard.html', {'frames': frames, 'comment_form': comment_form})
+        if form is None:
+            form = PainZoneReportForm()
+        latest_pain_report = PainZoneReport.objects.filter(
+            user=request.user
+        ).order_by('-timestamp').first()
+        return render(request, 'core/patient_dashboard.html', {
+            'zone_choices': PREDEFINED_ZONES,
+            'latest_pain_report': latest_pain_report,
+            'form': form,
+        })
+
+
+class SubmitPainZonesView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def post(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return HttpResponseForbidden("Patients only")
+
+        form = PainZoneReportForm(request.POST)
+        if form.is_valid():
+            PainZoneReport.objects.create(
+                user=request.user,
+                zones=form.cleaned_data['zones'],
+                note=form.cleaned_data['note'],
+            )
+            messages.success(request, "Pain zones submitted successfully")
+            return redirect('patient_dashboard')
+
+        # Validation failed — re-render dashboard with bound form
+        return PatientDashboardView().get(request, form=form)
+
+
+class PatientStatusAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({"error": "forbidden"}, status=403)
+
+        try:
+            hours = int(request.GET.get('hours', 1))
+        except (ValueError, TypeError):
+            hours = 1
+        if hours not in (1, 6, 24):
+            hours = 1
+
+        now = timezone.now()
+        since = now - timedelta(hours=hours)
+        frames = PressureFrame.objects.filter(
+            user=request.user, timestamp__gte=since
+        ).order_by('timestamp')
+
+        if not frames.exists():
+            return JsonResponse({
+                "alert": False,
+                "latest_ppi": None,
+                "latest_contact": None,
+                "latest_matrix": None,
+                "chart_data": {"labels": [], "counts": []},
+            })
+
+        latest = frames.last()
+
+        # Build hour buckets for chart_data — sorted chronologically
+        # Use datetime objects as keys so cross-midnight windows don't collide on "%H:%M" strings
+        ordered_bucket_times = []
+        bucket_counts = {}
+        for offset in range(hours + 1):  # +1 to include the current hour
+            bucket_time = (now - timedelta(hours=hours - offset)).replace(
+                minute=0, second=0, microsecond=0
+            )
+            if bucket_time not in bucket_counts:
+                ordered_bucket_times.append(bucket_time)
+                bucket_counts[bucket_time] = 0
+
+        for frame in frames:
+            if frame.high_pressure_flag:
+                bucket_time = frame.timestamp.replace(
+                    minute=0, second=0, microsecond=0
+                )
+                if bucket_time in bucket_counts:
+                    bucket_counts[bucket_time] += 1
+
+        labels = [bt.strftime("%H:%M") for bt in ordered_bucket_times]
+        counts = [bucket_counts[bt] for bt in ordered_bucket_times]
+
+        latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).first()
+
+        return JsonResponse({
+            "alert": latest.high_pressure_flag,
+            "latest_ppi": latest.peak_pressure_index,
+            "latest_contact": latest.contact_area_percentage,
+            "latest_matrix": latest.raw_matrix,
+            "chart_data": {"labels": labels, "counts": counts},
+            "saved_annotation": latest_annotation.cells if latest_annotation else [],
+        })
+
+
+class SaveHeatmapAnnotationView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def post(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({"error": "forbidden"}, status=403)
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "invalid JSON"}, status=400)
+
+        cells = body.get('cells', [])
+        note = body.get('note', '')
+
+        if not isinstance(cells, list):
+            return JsonResponse({"error": "cells must be a list"}, status=400)
+        for cell in cells:
+            if not (isinstance(cell, list) and len(cell) == 2 and
+                    isinstance(cell[0], int) and isinstance(cell[1], int) and
+                    0 <= cell[0] < 32 and 0 <= cell[1] < 32):
+                return JsonResponse({"error": "invalid cell coordinates"}, status=400)
+
+        HeatmapAnnotation.objects.create(user=request.user, cells=cells, note=note)
+        return JsonResponse({"status": "saved", "count": len(cells)})
 
 
 class ClinicianDashboardView(LoginRequiredMixin, View):
@@ -41,14 +175,26 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.role != User.ROLE_CLINICIAN:
             return redirect('home')
-        # Get assigned patients
         try:
             profile = ClinicianProfile.objects.get(user=request.user)
-            assignments = Assignment.objects.filter(clinician=profile)
+            assignments = Assignment.objects.filter(clinician=profile).select_related('patient__user')
         except ClinicianProfile.DoesNotExist:
             assignments = []
-        
-        return render(request, 'core/clinician_dashboard.html', {'assignments': assignments})
+
+        patients_data = []
+        for assignment in assignments:
+            patient_user = assignment.patient.user
+            latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
+            latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
+            patients_data.append({
+                'assignment': assignment,
+                'latest_frame': latest_frame,
+                'latest_annotation': latest_annotation,
+                'matrix_json': json.dumps(latest_frame.raw_matrix) if latest_frame else 'null',
+                'cells_json': json.dumps(latest_annotation.cells) if latest_annotation else '[]',
+            })
+
+        return render(request, 'core/clinician_dashboard.html', {'patients_data': patients_data})
 
 
 class AdminDashboardView(LoginRequiredMixin, View):
