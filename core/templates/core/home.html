@@ -1,0 +1,94 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Home - Sensore{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <h1 class="hero-title">Sensore</h1>
+        <p class="hero-subtitle">Advanced Pressure Ulcer Prevention System</p>
+        <div class="hero-description">
+            <p>Monitor patient pressure data in real-time, manage clinician assignments, and prevent pressure ulcers with our comprehensive healthcare management platform.</p>
+        </div>
+
+        {% if user.is_authenticated %}
+            <div class="welcome-card">
+                <h3>Welcome back, {{ user.first_name|default:user.username }}!</h3>
+                <p>You are logged in as: <span class="role-badge badge-{{ user.role }}">{{ user.get_role_display }}</span></p>
+
+                {% if user.is_admin %}
+                    <div class="quick-actions">
+                        <h4>Quick Actions</h4>
+                        <div class="action-buttons">
+                            <a href="{% url 'admin_dashboard' %}" class="btn-primary">
+                                <span class="btn-icon">📊</span>
+                                Admin Dashboard
+                            </a>
+                            <a href="{% url 'user_list' %}" class="btn-secondary">
+                                <span class="btn-icon">👥</span>
+                                Manage Users
+                            </a>
+                            <a href="{% url 'pressure_data_list' %}" class="btn-info">
+                                <span class="btn-icon">📈</span>
+                                View Data
+                            </a>
+                        </div>
+                    </div>
+                {% elif user.is_clinician %}
+                    <div class="quick-actions">
+                        <h4>Your Dashboard</h4>
+                        <div class="action-buttons">
+                            <a href="{% url 'clinician_dashboard' %}" class="btn-primary">
+                                <span class="btn-icon">🏥</span>
+                                Clinician Dashboard
+                            </a>
+                            <a href="{% url 'assignment_list' %}" class="btn-secondary">
+                                <span class="btn-icon">📋</span>
+                                My Assignments
+                            </a>
+                        </div>
+                    </div>
+                {% elif user.is_patient %}
+                    <div class="quick-actions">
+                        <h4>Your Dashboard</h4>
+                        <div class="action-buttons">
+                            <a href="{% url 'patient_dashboard' %}" class="btn-primary">
+                                <span class="btn-icon">👤</span>
+                                Patient Dashboard
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="login-prompt">
+                <p>Please sign in to access the system</p>
+                <a href="{% url 'login' %}" class="btn-primary btn-large">
+                    <span class="btn-icon">🔐</span>
+                    Sign In
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="features-section">
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Real-time Monitoring</h3>
+            <p>Continuous pressure data monitoring with instant alerts for high-pressure situations.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">👨‍⚕️</div>
+            <h3>Clinician Management</h3>
+            <p>Efficient assignment and management of healthcare professionals and patient care.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🛡️</div>
+            <h3>Prevention First</h3>
+            <p>Proactive pressure ulcer prevention through data-driven insights and alerts.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

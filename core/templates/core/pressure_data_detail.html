@@ -1,0 +1,198 @@
+{% extends 'core/base.html' %}
+{% block title %}Pressure Data Detail - Sensore{% endblock %}
+
+{% block content %}
+<div class="detail-header">
+    <div>
+        <h2>Pressure Frame Details</h2>
+        <a href="{% url 'pressure_data_list' %}" class="btn-secondary">← Back to Data</a>
+    </div>
+</div>
+
+<div class="detail-container">
+    <div class="detail-card">
+        <h3>Frame Information</h3>
+        <div class="detail-grid">
+            <div class="detail-row">
+                <label>Patient:</label>
+                <strong>{{ frame.user.get_full_name|default:frame.user.username }}</strong>
+            </div>
+            <div class="detail-row">
+                <label>Timestamp:</label>
+                <span>{{ frame.timestamp|date:"Y-m-d H:i:s" }}</span>
+            </div>
+            <div class="detail-row">
+                <label>Peak Pressure Index:</label>
+                <span>{{ frame.peak_pressure_index|floatformat:2|default:"N/A" }}</span>
+            </div>
+            <div class="detail-row">
+                <label>Contact Area Percentage:</label>
+                <span>{{ frame.contact_area_percentage|floatformat:2|default:"N/A" }}%</span>
+            </div>
+            <div class="detail-row">
+                <label>High Pressure Flag:</label>
+                <span>
+                    {% if frame.high_pressure_flag %}
+                        <span class="badge badge-danger">Yes - High Pressure Detected</span>
+                    {% else %}
+                        <span class="badge badge-success">No - Normal</span>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h3>Pressure Matrix (Preview)</h3>
+        <div class="matrix-preview">
+            <p class="matrix-info">Raw Matrix Data:</p>
+            <canvas id="heatmapCanvas" width="300" height="300" class="heatmap-canvas"></canvas>
+            <p class="matrix-info">Matrix size: 32x32 • Values: 0-4095</p>
+        </div>
+    </div>
+
+    <div class="action-buttons">
+        <a href="{% url 'delete_pressure_data' frame.id %}" class="btn-danger">Delete This Frame</a>
+        <a href="{% url 'pressure_data_list' %}" class="btn-secondary">Back to List</a>
+    </div>
+</div>
+
+<script src="{% static 'js/heatmap.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rawMatrix = {{ frame.raw_matrix|safe }};
+    if (rawMatrix && rawMatrix.length) {
+        drawHeatmap('heatmapCanvas', rawMatrix);
+    }
+});
+</script>
+
+<style>
+{% load static %}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.detail-header div {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+.detail-container {
+    display: grid;
+    gap: 2rem;
+}
+
+.detail-card {
+    background: white;
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.detail-card h3 {
+    margin-bottom: 1.5rem;
+    color: #333;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 0.5rem;
+}
+
+.detail-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.detail-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 1rem;
+    align-items: center;
+}
+
+.detail-row label {
+    font-weight: 600;
+    color: #555;
+}
+
+.detail-row span,
+.detail-row strong {
+    color: #333;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.badge-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.badge-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.matrix-preview {
+    text-align: center;
+    padding: 1.5rem;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+}
+
+.matrix-info {
+    color: #666;
+    font-size: 0.875rem;
+    margin: 0.5rem 0;
+}
+
+.heatmap-canvas {
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    margin: 1rem 0;
+    max-width: 100%;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+</style>
+{% endblock %}

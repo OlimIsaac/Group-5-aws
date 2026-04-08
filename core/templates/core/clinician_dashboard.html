@@ -1,0 +1,41 @@
+{% extends 'core/base.html' %}
+{% block title %}Clinician Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Clinician Dashboard</h2>
+    <p>Manage your assigned patients</p>
+</div>
+
+<div class="card">
+    <h3>Assigned Patients</h3>
+    {% if assignments %}
+        <ul>
+            {% for assignment in assignments %}
+                <li>
+                    <strong>{{ assignment.patient.user.first_name|default:assignment.patient.user.username }}</strong>
+                    <p>{{ assignment.patient.user.email }}</p>
+                    <a href="#" class="btn-link">View Data</a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No patients assigned yet.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Patient Analytics</h3>
+    <canvas id="patientChart"></canvas>
+</div>
+
+<div class="card">
+    <h3>Flagged Events</h3>
+    <div id="flaggedEvents">No flagged events</div>
+</div>
+
+<div class="card">
+    <h3>Reports</h3>
+    <button onclick="generateReport()">Generate Report</button>
+</div>
+{% endblock %}

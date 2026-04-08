@@ -1,0 +1,214 @@
+{% extends 'core/base.html' %}
+{% block title %}Pressure Data Management - Sensore{% endblock %}
+
+{% block content %}
+<div class="management-header">
+    <div>
+        <h2>Pressure Data Management</h2>
+        <a href="{% url 'admin_dashboard' %}" class="btn-secondary">← Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="filter-section">
+    <form method="get" class="filter-form">
+        <label for="patient-filter">Filter by Patient:</label>
+        <select id="patient-filter" name="patient">
+            <option value="">All Patients</option>
+            {% for patient in patients %}
+            <option value="{{ patient.id }}" {% if patient.id|stringformat:"s" == selected_patient %}selected{% endif %}>
+                {{ patient.user.get_full_name|default:patient.user.username }}
+            </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn-primary">Filter</button>
+    </form>
+</div>
+
+<div class="table-container">
+    {% if frames %}
+    <table class="management-table">
+        <thead>
+            <tr>
+                <th>Patient</th>
+                <th>Timestamp</th>
+                <th>Peak Pressure</th>
+                <th>Contact Area %</th>
+                <th>High Pressure Flag</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for frame in frames %}
+            <tr>
+                <td><strong>{{ frame.user.get_full_name|default:frame.user.username }}</strong></td>
+                <td>{{ frame.timestamp|date:"Y-m-d H:i:s" }}</td>
+                <td>{{ frame.peak_pressure_index|floatformat:2|default:"-" }}</td>
+                <td>{{ frame.contact_area_percentage|floatformat:2|default:"-" }}%</td>
+                <td>
+                    {% if frame.high_pressure_flag %}
+                        <span class="badge badge-danger">Yes</span>
+                    {% else %}
+                        <span class="badge badge-success">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'pressure_data_detail' frame.id %}" class="btn-sm btn-info">View</a>
+                    <a href="{% url 'delete_pressure_data' frame.id %}" class="btn-sm btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No pressure frames found.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+.filter-section {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.filter-form {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-form label {
+    font-weight: 600;
+    color: #333;
+}
+
+.filter-form select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.table-container {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow-x: auto;
+}
+
+.management-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.management-table th {
+    background-color: #f5f5f5;
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 2px solid #ddd;
+    font-weight: 600;
+}
+
+.management-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #ddd;
+}
+
+.management-table tbody tr:hover {
+    background-color: #f9f9f9;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.badge-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    margin-right: 0.3rem;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.btn-info:hover {
+    background-color: #138496;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+</style>
+{% endblock %}
