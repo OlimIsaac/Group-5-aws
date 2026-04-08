@@ -575,31 +575,33 @@ nav span {
     margin-bottom: 15px;
 }
 
-.metric-card h4 {
-    margin: 0 0 10px 0;
-    font-size: 12px;
-    color: #999;
-    text-transform: uppercase;
+.management-form {
+    display: flex;
+    flex-direction: column;
 }
 
-.metric-value {
-    font-size: 28px;
-    font-weight: bold;
-    color: #333;
-    margin: 0;
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: flex-end;
 }
 
-@media (max-width: 768px) {
-    .login-container {
-        margin: 20px;
-    }
-    
-    main {
-        padding: 15px;
-    }
-    
-    nav {
-        flex-direction: column;
-        gap: 10px;
-    }
-}
+/* Utility Classes */
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 1rem; }
+.mt-4 { margin-top: 1.5rem; }
+.mt-5 { margin-top: 3rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 1rem; }
+.mb-4 { margin-bottom: 1.5rem; }
+.mb-5 { margin-bottom: 3rem; }
+.d-flex { display: flex; }
+.justify-content-between { justify-content: space-between; }
+.align-items-center { align-items: center; }
+.w-100 { width: 100%; }

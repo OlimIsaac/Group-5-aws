@@ -8,6 +8,9 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(next_page='home'), name='logout'),
     path('patient/', views.PatientDashboardView.as_view(), name='patient_dashboard'),
+    path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
+    path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
+    path('patient/api/heatmap-annotation/', views.SaveHeatmapAnnotationView.as_view(), name='save_heatmap_annotation'),
     path('clinician/', views.ClinicianDashboardView.as_view(), name='clinician_dashboard'),
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
     

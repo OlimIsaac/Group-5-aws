@@ -3,6 +3,13 @@ from django.db import models
 from django.utils import timezone
 
 
+PREDEFINED_ZONES = [
+    'lower_back', 'left_hip', 'right_hip',
+    'left_thigh', 'right_thigh', 'tailbone',
+    'left_shoulder', 'right_shoulder',
+]
+
+
 class User(AbstractUser):
     ROLE_ADMIN = "admin"
     ROLE_CLINICIAN = "clinician"
@@ -72,3 +79,27 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user.username} on {self.pressure_frame}"
+
+
+class PainZoneReport(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pain_zone_reports')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    zones = models.JSONField()
+    note = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"PainZoneReport by {self.user.username} at {self.timestamp}"
+
+
+class HeatmapAnnotation(models.Model):
+    """Stores the cells a patient has marked as painful on the pressure heatmap."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='heatmap_annotations')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    cells = models.JSONField()  # list of [row, col] pairs, each in range [0, 31]
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"HeatmapAnnotation by {self.user.username} at {self.timestamp}"
