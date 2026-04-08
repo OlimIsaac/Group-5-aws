@@ -74,4 +74,8 @@ sensore/
 - Implement heatmap JS and Chart.js graphs
 - Add REST endpoints and authentication tokens
 - Build reporting and prediction logic
+<<<<<<< HEAD
 - Styling and responsive layout
+=======
+- Styling and responsive layout
+>>>>>>> origin/Harshitha-Kusam
