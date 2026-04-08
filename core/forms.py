@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import User, Comment, Assignment, ClinicianProfile, PatientProfile
+from .models import User, Comment, Assignment, ClinicianProfile, PatientProfile, PREDEFINED_ZONES
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -72,3 +72,16 @@ class PatientProfileForm(forms.ModelForm):
     class Meta:
         model = PatientProfile
         fields = []
+
+
+class PainZoneReportForm(forms.Form):
+    zones = forms.MultipleChoiceField(
+        choices=[(z, z.replace('_', ' ').title()) for z in PREDEFINED_ZONES],
+        widget=forms.CheckboxSelectMultiple,
+        required=True,
+    )
+    note = forms.CharField(
+        max_length=1000,
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Optional: describe your discomfort...'}),
+    )
