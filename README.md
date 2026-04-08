@@ -78,4 +78,3 @@ sensore/
 - Styling and responsive layout
 =======
 - Styling and responsive layout
->>>>>>> origin/Harshitha-Kusam
