@@ -17,21 +17,17 @@
                 <th>Username</th>
                 <th>Email</th>
                 <th>Full Name</th>
-                <th>Clinicians Assigned</th>
-                <th>Pressure Frames</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for patient in patients %}
             <tr>
-                <td><strong>{{ patient.user.username }}</strong></td>
-                <td>{{ patient.user.email|default:"-" }}</td>
-                <td>{{ patient.user.get_full_name|default:"-" }}</td>
-                <td>{{ patient.assignments.count }}</td>
-                <td>{{ patient.user.pressure_frames.count }}</td>
+                <td><strong>{{ patient.username }}</strong></td>
+                <td>{{ patient.email|default:"-" }}</td>
+                <td>{{ patient.get_full_name|default:"-" }}</td>
                 <td>
-                    <a href="{% url 'edit_user' patient.user.id %}" class="btn-sm btn-info">Edit User</a>
+                    <a href="{% url 'edit_user' patient.id %}" class="btn-sm btn-info">Edit User</a>
                 </td>
             </tr>
             {% endfor %}

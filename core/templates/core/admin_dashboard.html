@@ -3,110 +3,45 @@
 
 {% block content %}
 <div class="dashboard-header">
-    <div class="header-content">
-        <h1>Admin Dashboard</h1>
-        <p>Comprehensive management of users, clinicians, patients, assignments, pressure data, and system comments</p>
-    </div>
-    <div class="header-stats">
-        <div class="stat-item">
-            <span class="stat-number">{{ user_count|default:0 }}</span>
-            <span class="stat-label">Total Users</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number">{{ clinician_count|default:0 }}</span>
-            <span class="stat-label">Clinicians</span>
-        </div>
-        <div class="stat-item">
-            <span class="stat-number">{{ patient_count|default:0 }}</span>
-            <span class="stat-label">Patients</span>
-        </div>
-    </div>
+    <h2>Admin Dashboard</h2>
+    <p>Manage users, clinicians, patients, assignments, pressure data, and comments from the frontend.</p>
 </div>
 
 <div class="admin-grid">
     <div class="admin-card">
-        <div class="card-icon">👥</div>
         <h3>User Management</h3>
-        <p>Create, edit, and manage all user accounts with role-based access control</p>
-        <div class="card-actions">
-            <a href="{% url 'user_list' %}" class="btn-admin">Manage Users</a>
-            <a href="{% url 'create_user' %}" class="btn-admin-outline">+ Add User</a>
-        </div>
+        <p>Create and manage user accounts directly within the application.</p>
+        <a href="{% url 'user_list' %}" class="btn-admin">Manage Users</a>
     </div>
-
+    
     <div class="admin-card">
-        <div class="card-icon">👨‍⚕️</div>
         <h3>Clinician Management</h3>
-        <p>View and manage clinician profiles and their patient assignments</p>
-        <div class="card-actions">
-            <a href="{% url 'clinician_list' %}" class="btn-admin">View Clinicians</a>
-        </div>
+        <p>View and manage the clinician directory and assignments.</p>
+        <a href="{% url 'clinician_list' %}" class="btn-admin">Manage Clinicians</a>
     </div>
-
+    
     <div class="admin-card">
-        <div class="card-icon">🧑‍🍼</div>
         <h3>Patient Management</h3>
-        <p>Monitor patient profiles and their pressure data history</p>
-        <div class="card-actions">
-            <a href="{% url 'patient_list' %}" class="btn-admin">View Patients</a>
-        </div>
+        <p>View and manage patient profiles and accounts.</p>
+        <a href="{% url 'patient_list' %}" class="btn-admin">Manage Patients</a>
     </div>
-
+    
     <div class="admin-card">
-        <div class="card-icon">📋</div>
         <h3>Assignments</h3>
-        <p>Manage clinician-patient assignments and care responsibilities</p>
-        <div class="card-actions">
-            <a href="{% url 'assignment_list' %}" class="btn-admin">Manage Assignments</a>
-        </div>
+        <p>Assign patients to clinicians and maintain relationships.</p>
+        <a href="{% url 'assignment_list' %}" class="btn-admin">Manage Assignments</a>
     </div>
-
+    
     <div class="admin-card">
-        <div class="card-icon">📊</div>
         <h3>Pressure Data</h3>
-        <p>View and analyze sensor pressure frames with heatmap visualization</p>
-        <div class="card-actions">
-            <a href="{% url 'pressure_data_list' %}" class="btn-admin">View Data</a>
-        </div>
+        <p>Inspect patient sensor readings and frame details.</p>
+        <a href="{% url 'pressure_data_list' %}" class="btn-admin">View Pressure Data</a>
     </div>
-
+    
     <div class="admin-card">
-        <div class="card-icon">💬</div>
         <h3>Comments</h3>
-        <p>Manage user comments, feedback, and clinician responses</p>
-        <div class="card-actions">
-            <a href="{% url 'comment_list' %}" class="btn-admin">View Comments</a>
-        </div>
-    </div>
-</div>
-
-<div class="recent-activity">
-    <h2>Recent Activity</h2>
-    <div class="activity-grid">
-        <div class="activity-card">
-            <div class="activity-icon">🔴</div>
-            <div class="activity-content">
-                <h4>System Status</h4>
-                <p>All systems operational</p>
-                <small>Last checked: {{ current_time|date:"H:i" }}</small>
-            </div>
-        </div>
-        <div class="activity-card">
-            <div class="activity-icon">📈</div>
-            <div class="activity-content">
-                <h4>Data Collection</h4>
-                <p>{{ frame_count|default:0 }} pressure frames collected</p>
-                <small>Updated in real-time</small>
-            </div>
-        </div>
-        <div class="activity-card">
-            <div class="activity-icon">👥</div>
-            <div class="activity-content">
-                <h4>Active Users</h4>
-                <p>{{ active_users|default:0 }} users currently active</p>
-                <small>Session-based tracking</small>
-            </div>
-        </div>
+        <p>Review and moderate comments from the frontend interface.</p>
+        <a href="{% url 'comment_list' %}" class="btn-admin">Manage Comments</a>
     </div>
 </div>
 {% endblock %}
