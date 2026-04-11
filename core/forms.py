@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import User, Comment, Assignment, ClinicianProfile, PatientProfile, PREDEFINED_ZONES
+from .models import User, Comment, Assignment, ClinicianProfile, PatientProfile, PREDEFINED_ZONES, Feedback, PressureFrame
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -85,3 +85,37 @@ class PainZoneReportForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Optional: describe your discomfort...'}),
     )
+
+
+class FeedbackForm(forms.ModelForm):
+    pressure_frame = forms.ModelChoiceField(
+        queryset=PressureFrame.objects.none(),
+        empty_label="Select a sensor reading...",
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Sensor Reading"
+    )
+    
+    class Meta:
+        model = Feedback
+        fields = ['pressure_frame', 'feedback_text']
+        widgets = {
+            'feedback_text': forms.Textarea(attrs={
+                'rows': 4,
+                'placeholder': 'Describe your feedback about this sensor reading...',
+                'class': 'form-control'
+            }),
+        }
+
+
+class FeedbackAdminForm(forms.ModelForm):
+    class Meta:
+        model = Feedback
+        fields = ['status', 'admin_notes']
+        widgets = {
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'admin_notes': forms.Textarea(attrs={
+                'rows': 3,
+                'placeholder': 'Admin notes...',
+                'class': 'form-control'
+            }),
+        }

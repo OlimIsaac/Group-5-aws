@@ -8,8 +8,8 @@ from django.contrib.auth import login, logout, authenticate
 from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
 
-from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment
-from .forms import CommentForm, AssignmentForm, PainZoneReportForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm
+from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
+from .forms import CommentForm, AssignmentForm, PainZoneReportForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm, FeedbackForm, FeedbackAdminForm
 
 
 class HomeView(View):
@@ -213,7 +213,7 @@ class CreateAssignmentView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
         form = AssignmentForm()
-        return render(request, 'core/assignment_form.html', {'form': form})
+        return render(request, 'core/assignment_form.html', {'form': form, 'action': 'Create'})
 
     def post(self, request):
         if request.user.role != User.ROLE_ADMIN:
@@ -222,7 +222,7 @@ class CreateAssignmentView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             return redirect('assignment_list')
-        return render(request, 'core/assignment_form.html', {'form': form})
+        return render(request, 'core/assignment_form.html', {'form': form, 'action': 'Create'})
 
 
 class DeleteAssignmentView(LoginRequiredMixin, View):
@@ -259,7 +259,7 @@ class CreateUserView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
         form = CustomUserCreationForm()
-        return render(request, 'core/user_form.html', {'form': form})
+        return render(request, 'core/user_form.html', {'form': form, 'action': 'Create'})
 
     def post(self, request):
         if request.user.role != User.ROLE_ADMIN:
@@ -273,7 +273,7 @@ class CreateUserView(LoginRequiredMixin, View):
             elif user.role == User.ROLE_PATIENT:
                 PatientProfile.objects.create(user=user)
             return redirect('user_list')
-        return render(request, 'core/user_form.html', {'form': form})
+        return render(request, 'core/user_form.html', {'form': form, 'action': 'Create'})
 
 
 class EditUserView(LoginRequiredMixin, View):
@@ -284,7 +284,7 @@ class EditUserView(LoginRequiredMixin, View):
             return redirect('home')
         user = get_object_or_404(User, pk=user_id)
         form = UserForm(instance=user)
-        return render(request, 'core/user_form.html', {'form': form, 'editing': True})
+        return render(request, 'core/user_form.html', {'form': form, 'action': 'Edit', 'editing': True})
 
     def post(self, request, user_id):
         if request.user.role != User.ROLE_ADMIN:
@@ -294,7 +294,7 @@ class EditUserView(LoginRequiredMixin, View):
         if form.is_valid():
             form.save()
             return redirect('user_list')
-        return render(request, 'core/user_form.html', {'form': form, 'editing': True})
+        return render(request, 'core/user_form.html', {'form': form, 'action': 'Edit', 'editing': True})
 
 
 class DeleteUserView(LoginRequiredMixin, View):
@@ -396,3 +396,136 @@ class DeleteCommentView(LoginRequiredMixin, View):
         comment = get_object_or_404(Comment, pk=comment_id)
         comment.delete()
         return redirect('comment_list')
+
+
+class SubmitFeedbackView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role not in [User.ROLE_PATIENT, User.ROLE_CLINICIAN]:
+            return redirect('home')
+        
+        # Filter available frames based on user role
+        if request.user.role == User.ROLE_PATIENT:
+            frames = PressureFrame.objects.filter(user=request.user)
+        elif request.user.role == User.ROLE_CLINICIAN:
+            try:
+                profile = ClinicianProfile.objects.get(user=request.user)
+                assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
+                frames = PressureFrame.objects.filter(user__in=assigned_patients)
+            except ClinicianProfile.DoesNotExist:
+                frames = PressureFrame.objects.none()
+        else:
+            frames = PressureFrame.objects.none()
+        
+        form = FeedbackForm()
+        form.fields['pressure_frame'].queryset = frames
+        return render(request, 'core/feedback_submit.html', {'form': form})
+
+    def post(self, request):
+        if request.user.role not in [User.ROLE_PATIENT, User.ROLE_CLINICIAN]:
+            return redirect('home')
+        
+        form = FeedbackForm(request.POST)
+        if form.is_valid():
+            frame = form.cleaned_data['pressure_frame']
+            
+            # Additional permission check
+            if request.user.role == User.ROLE_PATIENT and frame.user != request.user:
+                messages.error(request, "You can only submit feedback on your own sensor data")
+                return redirect('submit_feedback')
+            elif request.user.role == User.ROLE_CLINICIAN:
+                try:
+                    profile = ClinicianProfile.objects.get(user=request.user)
+                    if not Assignment.objects.filter(clinician=profile, patient__user=frame.user).exists():
+                        messages.error(request, "You are not assigned to this patient")
+                        return redirect('submit_feedback')
+                except ClinicianProfile.DoesNotExist:
+                    messages.error(request, "Clinician profile not found")
+                    return redirect('submit_feedback')
+            
+            feedback = form.save(commit=False)
+            feedback.user = request.user
+            feedback.save()
+            messages.success(request, "Feedback submitted successfully")
+            return redirect('patient_dashboard' if request.user.role == User.ROLE_PATIENT else 'clinician_dashboard')
+        
+        # If form is invalid, re-render with errors
+        if request.user.role == User.ROLE_PATIENT:
+            frames = PressureFrame.objects.filter(user=request.user)
+        elif request.user.role == User.ROLE_CLINICIAN:
+            try:
+                profile = ClinicianProfile.objects.get(user=request.user)
+                assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
+                frames = PressureFrame.objects.filter(user__in=assigned_patients)
+            except ClinicianProfile.DoesNotExist:
+                frames = PressureFrame.objects.none()
+        else:
+            frames = PressureFrame.objects.none()
+        
+        form.fields['pressure_frame'].queryset = frames
+        return render(request, 'core/feedback_submit.html', {'form': form})
+
+
+class FeedbackListView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        
+        feedbacks = Feedback.objects.select_related('user', 'pressure_frame', 'reviewed_by').all()
+        return render(request, 'core/feedback_list.html', {'feedbacks': feedbacks})
+
+
+class FeedbackDetailView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request, feedback_id):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        
+        feedback = get_object_or_404(Feedback, pk=feedback_id)
+        form = FeedbackAdminForm(instance=feedback)
+        return render(request, 'core/feedback_detail.html', {'feedback': feedback, 'form': form})
+
+    def post(self, request, feedback_id):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        
+        feedback = get_object_or_404(Feedback, pk=feedback_id)
+        form = FeedbackAdminForm(request.POST, instance=feedback)
+        
+        if form.is_valid():
+            updated_feedback = form.save(commit=False)
+            
+            if 'mark_reviewed' in request.POST:
+                updated_feedback.mark_reviewed(request.user)
+                messages.success(request, "Feedback marked as reviewed")
+            elif 'resolve' in request.POST:
+                updated_feedback.resolve(request.user, request.POST.get('admin_notes', ''))
+                messages.success(request, "Feedback resolved")
+            else:
+                updated_feedback.save()
+                messages.success(request, "Feedback updated")
+            
+            return redirect('feedback_list')
+        
+        return render(request, 'core/feedback_detail.html', {'feedback': feedback, 'form': form})
+
+
+class DeleteFeedbackView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request, feedback_id):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        feedback = get_object_or_404(Feedback, pk=feedback_id)
+        return render(request, 'core/feedback_confirm_delete.html', {'feedback': feedback})
+
+    def post(self, request, feedback_id):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        feedback = get_object_or_404(Feedback, pk=feedback_id)
+        feedback.delete()
+        return redirect('feedback_list')

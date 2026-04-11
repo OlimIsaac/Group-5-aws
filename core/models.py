@@ -81,6 +81,45 @@ class Comment(models.Model):
         return f"Comment by {self.user.username} on {self.pressure_frame}"
 
 
+class Feedback(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_REVIEWED = 'reviewed'
+    STATUS_RESOLVED = 'resolved'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_REVIEWED, 'Reviewed'),
+        (STATUS_RESOLVED, 'Resolved'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
+    pressure_frame = models.ForeignKey(PressureFrame, on_delete=models.CASCADE, related_name='feedbacks')
+    timestamp = models.DateTimeField(default=timezone.now)
+    feedback_text = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    admin_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_feedbacks')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Feedback by {self.user.username} on {self.pressure_frame} ({self.get_status_display()})"
+
+    def mark_reviewed(self, admin_user):
+        self.status = self.STATUS_REVIEWED
+        self.reviewed_by = admin_user
+        self.reviewed_at = timezone.now()
+        self.save()
+
+    def resolve(self, admin_user, notes=''):
+        self.status = self.STATUS_RESOLVED
+        self.admin_notes = notes
+        self.reviewed_by = admin_user
+        self.reviewed_at = timezone.now()
+        self.save()
+
+
 class PainZoneReport(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pain_zone_reports')
     timestamp = models.DateTimeField(auto_now_add=True)

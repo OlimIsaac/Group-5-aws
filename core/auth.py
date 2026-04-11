@@ -1,6 +1,9 @@
 from django.contrib.auth.views import LoginView as DjangoLoginView
 from django.contrib.auth.forms import AuthenticationForm as DjangoAuthForm
+from django.views import View
 from django import forms
+from django.shortcuts import redirect
+from django.contrib.auth import logout
 
 
 class AuthenticationForm(DjangoAuthForm):
@@ -34,3 +37,15 @@ class LoginView(DjangoLoginView):
         elif user.role == User.ROLE_PATIENT:
             return '/patient/'
         return '/'
+
+
+class LogoutView(View):
+    """Simple logout view that handles both GET and POST requests"""
+    
+    def get(self, request):
+        logout(request)
+        return redirect('home')
+    
+    def post(self, request):
+        logout(request)
+        return redirect('home')

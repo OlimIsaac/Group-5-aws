@@ -43,5 +43,11 @@
         <p>Review and moderate comments from the frontend interface.</p>
         <a href="{% url 'comment_list' %}" class="btn-admin">Manage Comments</a>
     </div>
+    
+    <div class="admin-card">
+        <h3>Feedback Management</h3>
+        <p>Review and manage user feedback on sensor data accuracy.</p>
+        <a href="{% url 'feedback_list' %}" class="btn-admin">Manage Feedback</a>
+    </div>
 </div>
 {% endblock %}

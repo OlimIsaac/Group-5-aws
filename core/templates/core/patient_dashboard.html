@@ -104,6 +104,13 @@
         </div>
     {% endif %}
 </div>
+
+<!-- Feedback submission card -->
+<div class="card feedback-card">
+    <h3>Provide Feedback</h3>
+    <p>Help us improve the system by sharing your observations about sensor readings.</p>
+    <a href="{% url 'submit_feedback' %}" class="btn btn-info">Submit Feedback</a>
+</div>
 {% endblock %}
 
 {% block scripts %}

@@ -1,0 +1,186 @@
+{% extends 'core/base.html' %}
+{% block title %}Delete Feedback - Sensore{% endblock %}
+
+{% block content %}
+<div class="delete-header">
+    <h2>Delete Feedback</h2>
+    <a href="{% url 'feedback_list' %}" class="btn-secondary">← Back to Feedback List</a>
+</div>
+
+<div class="delete-container">
+    <div class="delete-card">
+        <div class="warning-icon">
+            <span>⚠️</span>
+        </div>
+        
+        <h3>Are you sure you want to delete this feedback?</h3>
+        
+        <div class="feedback-summary">
+            <p><strong>Submitted by:</strong> {{ feedback.user.username }} ({{ feedback.user.get_role_display }})</p>
+            <p><strong>Submitted on:</strong> {{ feedback.timestamp|date:"M d, Y H:i" }}</p>
+            <p><strong>Status:</strong> {{ feedback.get_status_display }}</p>
+            <p><strong>Feedback:</strong> {{ feedback.feedback_text|truncatechars:100 }}</p>
+        </div>
+        
+        <div class="warning-text">
+            <p>This action cannot be undone. The feedback will be permanently removed from the system.</p>
+        </div>
+        
+        <div class="delete-actions">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn-danger">Yes, Delete Feedback</button>
+            </form>
+            <a href="{% url 'feedback_detail' feedback.id %}" class="btn-secondary">Cancel</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.delete-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.delete-header h2 {
+    color: #dc3545;
+}
+
+.btn-secondary {
+    background-color: #5a6ead;
+    color: white;
+    padding: 10px 16px;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+.btn-secondary:hover {
+    background-color: #4a5a9d;
+}
+
+.delete-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 60vh;
+}
+
+.delete-card {
+    background: white;
+    border-radius: 14px;
+    padding: 2rem;
+    box-shadow: 0 18px 50px rgba(32, 40, 61, 0.08);
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+}
+
+.warning-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.warning-icon span {
+    display: inline-block;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.delete-card h3 {
+    color: #172b4d;
+    margin-bottom: 1.5rem;
+    font-size: 1.25rem;
+}
+
+.feedback-summary {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.feedback-summary p {
+    margin: 0.5rem 0;
+    color: #4a5568;
+    font-size: 0.95rem;
+}
+
+.feedback-summary strong {
+    color: #344050;
+}
+
+.warning-text {
+    margin-bottom: 2rem;
+    color: #dc3545;
+    font-weight: 500;
+}
+
+.delete-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-danger, .btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+.btn-secondary {
+    background: #5a6ead;
+    color: white;
+}
+
+.btn-danger:hover, .btn-secondary:hover {
+    transform: translateY(-1px);
+}
+
+@media (max-width: 480px) {
+    .delete-card {
+        padding: 1.5rem;
+    }
+    
+    .delete-actions {
+        flex-direction: column;
+    }
+    
+    .btn-danger, .btn-secondary {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}

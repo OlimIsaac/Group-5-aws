@@ -1,0 +1,295 @@
+{% extends 'core/base.html' %}
+{% block title %}Review Feedback - Sensore{% endblock %}
+
+{% block content %}
+<div class="management-header">
+    <div>
+        <h2>Review Feedback</h2>
+        <a href="{% url 'feedback_list' %}" class="btn-secondary">← Back to Feedback List</a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="messages">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="feedback-container">
+    <div class="feedback-card">
+        <h3>Feedback Details</h3>
+        <div class="feedback-info">
+            <p><strong>Submitted by:</strong> {{ feedback.user.username }} ({{ feedback.user.get_role_display }})</p>
+            <p><strong>Submitted on:</strong> {{ feedback.timestamp|date:"M d, Y H:i" }}</p>
+            <p><strong>Status:</strong> <span class="badge badge-{{ feedback.status }}">{{ feedback.get_status_display }}</span></p>
+            {% if feedback.reviewed_by %}
+            <p><strong>Reviewed by:</strong> {{ feedback.reviewed_by.username }} on {{ feedback.reviewed_at|date:"M d, Y H:i" }}</p>
+            {% endif %}
+        </div>
+        
+        <div class="feedback-text">
+            <h4>Feedback Text</h4>
+            <p>{{ feedback.feedback_text }}</p>
+        </div>
+        
+        {% if feedback.admin_notes %}
+        <div class="admin-notes">
+            <h4>Admin Notes</h4>
+            <p>{{ feedback.admin_notes }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="sensor-data-card">
+        <h3>Related Sensor Reading</h3>
+        <div class="sensor-info">
+            <p><strong>Frame ID:</strong> {{ feedback.pressure_frame.id }}</p>
+            <p><strong>Timestamp:</strong> {{ feedback.pressure_frame.timestamp|date:"M d, Y H:i:s" }}</p>
+            <p><strong>User:</strong> {{ feedback.pressure_frame.user.username }}</p>
+            <p><strong>Peak Pressure:</strong> {{ feedback.pressure_frame.peak_pressure_index|default:"N/A" }}</p>
+            <p><strong>Contact Area:</strong> {{ feedback.pressure_frame.contact_area_percentage|default:"N/A" }}%</p>
+            <p><strong>High Pressure Flag:</strong> {{ feedback.pressure_frame.high_pressure_flag|yesno:"Yes,No" }}</p>
+        </div>
+        
+        <div class="matrix-preview">
+            <h4>Pressure Matrix Preview</h4>
+            <pre>{{ feedback.pressure_frame.raw_matrix|truncatechars:200 }}</pre>
+        </div>
+    </div>
+
+    <div class="admin-actions-card">
+        <h3>Admin Actions</h3>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                {{ form.status }}
+            </div>
+            
+            <div class="form-group">
+                <label for="{{ form.admin_notes.id_for_label }}">{{ form.admin_notes.label }}</label>
+                {{ form.admin_notes }}
+            </div>
+            
+            <div class="action-buttons">
+                <button type="submit" name="mark_reviewed" class="btn-info">Mark as Reviewed</button>
+                <button type="submit" name="resolve" class="btn-success">Resolve Feedback</button>
+                <button type="submit" class="btn-secondary">Update Status</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.management-header div {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.feedback-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+}
+
+.feedback-card, .sensor-data-card, .admin-actions-card {
+    background: white;
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 18px 50px rgba(32, 40, 61, 0.08);
+}
+
+.feedback-card h3, .sensor-data-card h3, .admin-actions-card h3 {
+    margin-top: 0;
+    color: #172b4d;
+    font-size: 1.25rem;
+}
+
+.feedback-info, .sensor-info {
+    margin-bottom: 1.5rem;
+}
+
+.feedback-info p, .sensor-info p {
+    margin: 0.5rem 0;
+    color: #4a5568;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.badge-pending {
+    background-color: #fef3c7;
+    color: #d97706;
+}
+
+.badge-reviewed {
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+
+.badge-resolved {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.feedback-text, .admin-notes, .matrix-preview {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.feedback-text h4, .admin-notes h4, .matrix-preview h4 {
+    margin: 0 0 0.5rem 0;
+    color: #344050;
+    font-size: 1rem;
+}
+
+.feedback-text p, .admin-notes p {
+    color: #4a5568;
+    line-height: 1.6;
+}
+
+.matrix-preview pre {
+    background: #f7fafc;
+    padding: 1rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    overflow-x: auto;
+    color: #2d3748;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #344050;
+}
+
+.form-group select, .form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-info, .btn-success, .btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-info {
+    background: #1f3c88;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #1a336f;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+
+.btn-secondary {
+    background: #5a6ead;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4a5a9d;
+}
+
+.btn-info:hover, .btn-success:hover, .btn-secondary:hover {
+    transform: translateY(-1px);
+}
+
+.messages {
+    margin-bottom: 1rem;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.btn-secondary {
+    background-color: #5a6ead;
+    color: white;
+    padding: 10px 16px;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+.btn-secondary:hover {
+    background-color: #4a5a9d;
+}
+
+@media (min-width: 768px) {
+    .feedback-container {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .admin-actions-card {
+        grid-column: 1 / -1;
+    }
+}
+</style>
+{% endblock %}

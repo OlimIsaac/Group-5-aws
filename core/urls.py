@@ -1,12 +1,11 @@
 from django.urls import path, include
-from .auth import LoginView
-from django.contrib.auth.views import LogoutView
+from .auth import LoginView, LogoutView
 from . import views
 
 urlpatterns = [
     path('', views.HomeView.as_view(), name='home'),
     path('login/', LoginView.as_view(), name='login'),
-    path('logout/', LogoutView.as_view(next_page='home'), name='logout'),
+    path('logout/', LogoutView.as_view(), name='logout'),
     path('patient/', views.PatientDashboardView.as_view(), name='patient_dashboard'),
     path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
     path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
@@ -39,4 +38,10 @@ urlpatterns = [
     # Comment Management
     path('manage/comments/', views.CommentListView.as_view(), name='comment_list'),
     path('manage/comments/<int:comment_id>/delete/', views.DeleteCommentView.as_view(), name='delete_comment'),
+    
+    # Feedback Management
+    path('feedback/submit/', views.SubmitFeedbackView.as_view(), name='submit_feedback'),
+    path('manage/feedback/', views.FeedbackListView.as_view(), name='feedback_list'),
+    path('manage/feedback/<int:feedback_id>/', views.FeedbackDetailView.as_view(), name='feedback_detail'),
+    path('manage/feedback/<int:feedback_id>/delete/', views.DeleteFeedbackView.as_view(), name='delete_feedback'),
 ]
