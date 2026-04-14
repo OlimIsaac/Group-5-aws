@@ -57,47 +57,142 @@
 
 <div class="card">
     <div class="d-flex justify-content-between align-items-center">
-        <h3>High-Pressure Alerts</h3>
-        <span style="font-size:0.85rem;color:#666;">{{ high_pressure_events|length }} recent</span>
+        <h3>Pressure Alerts</h3>
+        <span id="alertCount"
+              data-high-count="{{ high_pressure_events|length }}"
+              data-average-count="{{ average_pressure_events|length }}"
+              data-low-count="{{ low_pressure_events|length }}"
+              style="font-size:0.85rem;color:#666;">{{ high_pressure_events|length }} recent</span>
     </div>
-    {% if high_pressure_events %}
-        <div class="table-container" style="margin-top:1rem;">
-            <table class="management-table" style="min-width:0;">
-                <thead>
-                    <tr>
-                        <th>Patient</th>
-                        <th>Time</th>
-                        <th>Peak Pressure</th>
-                        <th>Contact Area</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for event in high_pressure_events %}
-                    <tr>
-                        <td>{{ event.user.first_name|default:event.user.username }}</td>
-                        <td>{{ event.timestamp|date:"N j, H:i" }}</td>
-                        <td>
-                            {% if event.peak_pressure_index is not None %}
-                                {{ event.peak_pressure_index|floatformat:1 }}
-                            {% else %}
-                                --
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if event.contact_area_percentage is not None %}
-                                {{ event.contact_area_percentage|floatformat:1 }}%
-                            {% else %}
-                                --
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% else %}
-        <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No high-pressure alerts for assigned patients.</p>
-    {% endif %}
+    <div class="alert-filter" style="margin-top:0.75rem;">
+        <span class="alert-filter-label">View:</span>
+        <button type="button" class="alert-filter-btn active" data-filter="high">High</button>
+        <button type="button" class="alert-filter-btn" data-filter="average">Average</button>
+        <button type="button" class="alert-filter-btn" data-filter="low">Low</button>
+    </div>
+
+    <div class="alert-table" data-filter="high" style="margin-top:1rem;">
+        {% if high_pressure_events %}
+            <div class="table-container" style="margin-top:1rem;">
+                <table class="management-table" style="min-width:0;">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Time</th>
+                            <th>Peak Pressure</th>
+                            <th>Contact Area</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in high_pressure_events %}
+                        <tr>
+                            <td>{{ event.user.first_name|default:event.user.username }}</td>
+                            <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                            <td>
+                                {% if event.peak_pressure_index is not None %}
+                                    {{ event.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.contact_area_percentage is not None %}
+                                    {{ event.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No high-pressure alerts for assigned patients.</p>
+        {% endif %}
+    </div>
+
+    <div class="alert-table" data-filter="average" style="margin-top:1rem; display:none;">
+        {% if average_pressure_events %}
+            <div class="table-container" style="margin-top:1rem;">
+                <table class="management-table" style="min-width:0;">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Time</th>
+                            <th>Peak Pressure</th>
+                            <th>Contact Area</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in average_pressure_events %}
+                        <tr>
+                            <td>{{ event.user.first_name|default:event.user.username }}</td>
+                            <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                            <td>
+                                {% if event.peak_pressure_index is not None %}
+                                    {{ event.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.contact_area_percentage is not None %}
+                                    {{ event.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No average-pressure alerts for assigned patients.</p>
+        {% endif %}
+    </div>
+
+    <div class="alert-table" data-filter="low" style="margin-top:1rem; display:none;">
+        {% if low_pressure_events %}
+            <div class="table-container" style="margin-top:1rem;">
+                <table class="management-table" style="min-width:0;">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Time</th>
+                            <th>Peak Pressure</th>
+                            <th>Contact Area</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in low_pressure_events %}
+                        <tr>
+                            <td>{{ event.user.first_name|default:event.user.username }}</td>
+                            <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                            <td>
+                                {% if event.peak_pressure_index is not None %}
+                                    {{ event.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.contact_area_percentage is not None %}
+                                    {{ event.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No low-pressure alerts for assigned patients.</p>
+        {% endif %}
+    </div>
 </div>
 
 <div class="card">
@@ -163,6 +258,38 @@
     background-color: #f8d7da;
     color: #721c24;
     border: 1px solid #f5c6cb;
+}
+.alert-filter {
+    display: inline-flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.alert-filter-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+}
+.alert-filter-btn {
+    border: 1px solid #1f3c88;
+    background: #e8edf7;
+    color: #1f3c88;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    width: auto;
+    min-width: 72px;
+}
+.alert-filter-btn.active {
+    background: #1f3c88;
+    color: #fff;
+    border-color: #1f3c88;
+}
+.alert-filter-btn:hover {
+    background: #e2e8f0;
 }
 </style>
 <script src="{% static 'js/heatmap.js' %}"></script>
