@@ -8,6 +8,14 @@
     <p>Manage your assigned patients</p>
 </div>
 
+{% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+{% endif %}
+
 <div class="card">
     <h3>Assigned Patients</h3>
     {% if patients_data %}
@@ -91,9 +99,72 @@
         <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No high-pressure alerts for assigned patients.</p>
     {% endif %}
 </div>
+
+<div class="card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>Patient Comments</h3>
+        <span style="font-size:0.85rem;color:#666;">{{ patient_comments|length }} recent</span>
+    </div>
+    {% if patient_comments %}
+        <div class="table-container" style="margin-top:1rem;">
+            <table class="management-table" style="min-width:0;">
+                <thead>
+                    <tr>
+                        <th>Patient</th>
+                        <th>Time</th>
+                        <th>Comment</th>
+                        <th>Reply</th>
+                        <th>Frame</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for comment in patient_comments %}
+                    <tr>
+                        <td>{{ comment.user.first_name|default:comment.user.username }}</td>
+                        <td>{{ comment.timestamp|date:"N j, H:i" }}</td>
+                        <td style="max-width:220px;">
+                            {{ comment.text|truncatewords:18 }}
+                        </td>
+                        <td style="min-width:220px;">
+                            <form method="post" action="{% url 'reply_comment' comment.id %}">
+                                {% csrf_token %}
+                                <textarea name="clinician_reply" rows="2" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;">{{ comment.clinician_reply|default:'' }}</textarea>
+                                <button type="submit" class="btn-secondary" style="margin-top:0.5rem;">Save Reply</button>
+                            </form>
+                        </td>
+                        <td>#{{ comment.pressure_frame.id }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No comments from assigned patients.</p>
+    {% endif %}
+</div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+.messages {
+    margin-bottom: 1rem;
+}
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+</style>
 <script src="{% static 'js/heatmap.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {

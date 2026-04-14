@@ -204,10 +204,52 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
                 .order_by('-timestamp')[:20]
             )
 
+        patient_comments = []
+        if patient_users:
+            patient_comments = (
+                Comment.objects.filter(user__in=patient_users)
+                .select_related('user', 'pressure_frame')
+                .order_by('-timestamp')[:20]
+            )
+
         return render(request, 'core/clinician_dashboard.html', {
             'patients_data': patients_data,
             'high_pressure_events': high_pressure_events,
+            'patient_comments': patient_comments,
         })
+
+
+class ReplyCommentView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def post(self, request, comment_id):
+        if request.user.role != User.ROLE_CLINICIAN:
+            return redirect('home')
+
+        reply_text = request.POST.get('clinician_reply', '').strip()
+        if not reply_text:
+            messages.error(request, 'Reply cannot be empty.')
+            return redirect('clinician_dashboard')
+
+        comment = get_object_or_404(Comment, pk=comment_id)
+
+        try:
+            profile = ClinicianProfile.objects.get(user=request.user)
+        except ClinicianProfile.DoesNotExist:
+            return redirect('home')
+
+        is_assigned = Assignment.objects.filter(
+            clinician=profile,
+            patient__user=comment.user,
+        ).exists()
+        if not is_assigned:
+            messages.error(request, 'You are not assigned to this patient.')
+            return redirect('clinician_dashboard')
+
+        comment.clinician_reply = reply_text
+        comment.save(update_fields=['clinician_reply'])
+        messages.success(request, 'Reply saved.')
+        return redirect('clinician_dashboard')
 
 
 class AdminDashboardView(LoginRequiredMixin, View):
