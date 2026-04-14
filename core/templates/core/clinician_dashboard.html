@@ -48,8 +48,48 @@
 </div>
 
 <div class="card">
-    <h3>Flagged Events</h3>
-    <div id="flaggedEvents">No flagged events</div>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>High-Pressure Alerts</h3>
+        <span style="font-size:0.85rem;color:#666;">{{ high_pressure_events|length }} recent</span>
+    </div>
+    {% if high_pressure_events %}
+        <div class="table-container" style="margin-top:1rem;">
+            <table class="management-table" style="min-width:0;">
+                <thead>
+                    <tr>
+                        <th>Patient</th>
+                        <th>Time</th>
+                        <th>Peak Pressure</th>
+                        <th>Contact Area</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in high_pressure_events %}
+                    <tr>
+                        <td>{{ event.user.first_name|default:event.user.username }}</td>
+                        <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                        <td>
+                            {% if event.peak_pressure_index is not None %}
+                                {{ event.peak_pressure_index|floatformat:1 }}
+                            {% else %}
+                                --
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if event.contact_area_percentage is not None %}
+                                {{ event.contact_area_percentage|floatformat:1 }}%
+                            {% else %}
+                                --
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No high-pressure alerts for assigned patients.</p>
+    {% endif %}
 </div>
 {% endblock %}
 

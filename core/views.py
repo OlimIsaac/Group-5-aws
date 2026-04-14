@@ -16,6 +16,14 @@ class HomeView(View):
     def get(self, request):
         if not request.user.is_authenticated:
             return redirect('login')
+
+        if not request.user.role:
+            if request.user.is_superuser or request.user.is_staff:
+                request.user.role = User.ROLE_ADMIN
+                request.user.save(update_fields=['role'])
+            else:
+                logout(request)
+                return redirect('login')
         
         # Redirect based on role
         if request.user.role == User.ROLE_ADMIN:
@@ -184,7 +192,22 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
                 'cells_json': json.dumps(latest_annotation.cells) if latest_annotation else '[]',
             })
 
-        return render(request, 'core/clinician_dashboard.html', {'patients_data': patients_data})
+        patient_users = [assignment.patient.user for assignment in assignments]
+        high_pressure_events = []
+        if patient_users:
+            high_pressure_events = (
+                PressureFrame.objects.filter(
+                    user__in=patient_users,
+                    high_pressure_flag=True,
+                )
+                .select_related('user')
+                .order_by('-timestamp')[:20]
+            )
+
+        return render(request, 'core/clinician_dashboard.html', {
+            'patients_data': patients_data,
+            'high_pressure_events': high_pressure_events,
+        })
 
 
 class AdminDashboardView(LoginRequiredMixin, View):
