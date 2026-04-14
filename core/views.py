@@ -9,6 +9,7 @@ from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
 
 from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
+from .utils import LOW_PRESSURE_THRESHOLD, HIGH_PRESSURE_THRESHOLD
 from .forms import CommentForm, AssignmentForm, PainZoneReportForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm, FeedbackForm, FeedbackAdminForm
 
 
@@ -194,14 +195,25 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
 
         patient_users = [assignment.patient.user for assignment in assignments]
         high_pressure_events = []
+        average_pressure_events = []
+        low_pressure_events = []
         if patient_users:
-            high_pressure_events = (
-                PressureFrame.objects.filter(
-                    user__in=patient_users,
-                    high_pressure_flag=True,
-                )
-                .select_related('user')
-                .order_by('-timestamp')[:20]
+            base_qs = PressureFrame.objects.filter(
+                user__in=patient_users,
+                peak_pressure_index__isnull=False,
+            ).select_related('user').order_by('-timestamp')
+
+            high_pressure_events = list(
+                base_qs.filter(peak_pressure_index__gte=HIGH_PRESSURE_THRESHOLD)[:20]
+            )
+            average_pressure_events = list(
+                base_qs.filter(
+                    peak_pressure_index__gt=LOW_PRESSURE_THRESHOLD,
+                    peak_pressure_index__lt=HIGH_PRESSURE_THRESHOLD,
+                )[:20]
+            )
+            low_pressure_events = list(
+                base_qs.filter(peak_pressure_index__lte=LOW_PRESSURE_THRESHOLD)[:20]
             )
 
         patient_comments = []
@@ -215,6 +227,8 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
         return render(request, 'core/clinician_dashboard.html', {
             'patients_data': patients_data,
             'high_pressure_events': high_pressure_events,
+            'average_pressure_events': average_pressure_events,
+            'low_pressure_events': low_pressure_events,
             'patient_comments': patient_comments,
         })
 

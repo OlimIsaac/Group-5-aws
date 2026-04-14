@@ -185,6 +185,31 @@ document.addEventListener('DOMContentLoaded', function () {
             drawAnnotationOnCanvas(annotCanvas, cells);
         }
     });
+
+    var filterButtons = document.querySelectorAll('.alert-filter-btn');
+    var alertTables = document.querySelectorAll('.alert-table');
+    var alertCount = document.getElementById('alertCount');
+
+    function setAlertFilter(filter) {
+        filterButtons.forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+        alertTables.forEach(function (table) {
+            table.style.display = table.dataset.filter === filter ? 'block' : 'none';
+        });
+        if (alertCount) {
+            var countValue = alertCount.getAttribute('data-' + filter + '-count') || '0';
+            alertCount.textContent = countValue + ' recent';
+        }
+    }
+
+    filterButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setAlertFilter(btn.dataset.filter);
+        });
+    });
+
+    setAlertFilter('high');
 });
 </script>
 {% endblock %}
