@@ -40,6 +40,7 @@
             <button type="submit">Sign In</button>
         </form>
         
+        {% if show_demo_credentials %}
         <div class="demo-credentials">
             <p>Demo Accounts:</p>
             <table>
@@ -60,6 +61,7 @@
                 </tr>
             </table>
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
