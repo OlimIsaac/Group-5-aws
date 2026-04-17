@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import User, Comment, Assignment, ClinicianProfile, PatientProfile, PREDEFINED_ZONES, Feedback, PressureFrame
+from .models import User, Comment, ClinicianPatientAssignment, ClinicianProfile, PatientProfile, PREDEFINED_ZONES, Feedback, PressureFrame, SensorData
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -42,24 +42,34 @@ class CommentForm(forms.ModelForm):
         }
 
 
-class AssignmentForm(forms.ModelForm):
+class ClinicianPatientAssignmentForm(forms.ModelForm):
     clinician = forms.ModelChoiceField(
-        queryset=ClinicianProfile.objects.select_related('user'),
+        queryset=User.objects.filter(role=User.ROLE_CLINICIAN),
         label="Select Clinician",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     patient = forms.ModelChoiceField(
-        queryset=PatientProfile.objects.select_related('user'),
+        queryset=User.objects.filter(role=User.ROLE_PATIENT),
         label="Select Patient",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
 
     class Meta:
-        model = Assignment
+        model = ClinicianPatientAssignment
         fields = ['clinician', 'patient']
 
-    def __str__(self):
-        return f"{self.cleaned_data['clinician']} -> {self.cleaned_data['patient']}"
+    def clean(self):
+        cleaned_data = super().clean()
+        clinician = cleaned_data.get('clinician')
+        patient = cleaned_data.get('patient')
+
+        if clinician and patient:
+            if clinician == patient:
+                self.add_error('patient', 'Clinician and patient must be different users.')
+            if ClinicianPatientAssignment.objects.filter(clinician=clinician, patient=patient).exists():
+                self.add_error(None, 'This assignment already exists.')
+
+        return cleaned_data
 
 
 class ClinicianProfileForm(forms.ModelForm):
@@ -88,23 +98,45 @@ class PainZoneReportForm(forms.Form):
 
 
 class FeedbackForm(forms.ModelForm):
-    pressure_frame = forms.ModelChoiceField(
-        queryset=PressureFrame.objects.none(),
+    sensor_data = forms.ModelChoiceField(
+        queryset=SensorData.objects.none(),
         empty_label="Select a sensor reading...",
         widget=forms.Select(attrs={'class': 'form-control'}),
-        label="Sensor Reading"
+        label="Sensor Reading",
+        required=True
     )
-    
+    feedback_text = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'rows': 4,
+            'placeholder': 'Describe your feedback about this sensor reading...',
+            'class': 'form-control'
+        }),
+        label='Feedback Text',
+        required=True,
+        min_length=10
+    )
+
     class Meta:
         model = Feedback
-        fields = ['pressure_frame', 'feedback_text']
-        widgets = {
-            'feedback_text': forms.Textarea(attrs={
-                'rows': 4,
-                'placeholder': 'Describe your feedback about this sensor reading...',
-                'class': 'form-control'
-            }),
-        }
+        fields = ['sensor_data']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        feedback_text = cleaned_data.get('feedback_text')
+        
+        if not feedback_text or not feedback_text.strip():
+            self.add_error('feedback_text', 'Feedback text is required.')
+        elif len(feedback_text.strip()) < 10:
+            self.add_error('feedback_text', 'Feedback must be at least 10 characters.')
+        
+        return cleaned_data
+
+    def save(self, commit=True):
+        feedback = super().save(commit=False)
+        feedback.comment = self.cleaned_data.get('feedback_text', '').strip()
+        if commit:
+            feedback.save()
+        return feedback
 
 
 class FeedbackAdminForm(forms.ModelForm):

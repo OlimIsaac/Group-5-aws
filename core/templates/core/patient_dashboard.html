@@ -15,7 +15,6 @@
 {% endif %}
 
 <div class="patient-layout">
-    <!-- Left column: heatmap + metrics -->
     <div class="col-left card">
         <h3>Live Heatmap</h3>
         <div class="heatmap-wrapper">
@@ -28,28 +27,19 @@
             <button id="annotateSaveBtn" class="btn btn-primary btn-sm" type="button">Save Pain Marks</button>
         </div>
         <p id="annotationStatus" class="annotation-status"></p>
+
         <div class="metrics-grid">
             <div class="metric-card">
                 <h4>Peak Pressure Index</h4>
-                <p class="metric-value">PPI: <span id="ppiValue">--</span></p>
+                <p class="metric-value" id="ppiValue">--</p>
             </div>
             <div class="metric-card">
                 <h4>Contact Area</h4>
-                <p class="metric-value">Contact: <span id="contactValue">--</span></p>
+                <p class="metric-value" id="contactValue">--</p>
             </div>
         </div>
-<div class="card">
-    <h3>Live Heatmap</h3>
-    <canvas id="heatmapCanvas" width="320" height="320"></canvas>
-</div>
-
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-    <div class="metric-card">
-        <h4>Peak Pressure Index</h4>
-        <p class="metric-value" id="ppiValue">--</p>
     </div>
-    
-    <!-- Right column: alert + time filters + chart -->
+
     <div class="col-right">
         <div id="alertBanner" class="alert">Connecting...</div>
 
@@ -62,54 +52,52 @@
             </div>
             <canvas id="pressureChart" height="200"></canvas>
         </div>
+
+        <div class="card pain-zone-card">
+            <h3>Report Painful Areas</h3>
+            <p>Select the areas where you feel discomfort so your clinician can see them.</p>
+
+            {% if form.errors %}
+                <div class="alert alert-danger">Please correct the errors below.</div>
+            {% endif %}
+
+            <form method="post" action="{% url 'submit_pain_zones' %}">
+                {% csrf_token %}
+                <div class="zone-checkboxes">
+                    {% for value, label in form.fields.zones.choices %}
+                        <label class="zone-label">
+                            <input type="checkbox" name="zones" value="{{ value }}"
+                                {% if value in form.zones.value %}checked{% endif %}>
+                            {{ label }}
+                        </label>
+                    {% endfor %}
+                </div>
+                {% if form.errors.zones %}
+                    <p class="error-text">{{ form.errors.zones.0 }}</p>
+                {% endif %}
+
+                <div class="form-group mt-3">
+                    <label for="id_note">Additional notes (optional)</label>
+                    {{ form.note }}
+                </div>
+
+                <button type="submit" class="btn btn-primary mt-3">Submit Report</button>
+            </form>
+
+            {% if latest_pain_report %}
+                <div class="mt-3">
+                    <p><strong>Last submitted:</strong> {{ latest_pain_report.timestamp|date:"N j, Y H:i" }} UTC</p>
+                    <p><strong>Zones:</strong> {{ latest_pain_report.zones|join:", " }}</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="card feedback-card">
+            <h3>Provide Feedback</h3>
+            <p>Help us improve the system by sharing your observations about sensor readings.</p>
+            <a href="{% url 'submit_feedback' %}" class="btn btn-info">Submit Feedback</a>
+        </div>
     </div>
-</div>
-
-<!-- Pain zone reporting card -->
-<div class="card pain-zone-card">
-    <h3>Report Painful Areas</h3>
-    <p>Select the areas where you feel discomfort so your clinician can see them.</p>
-
-    {% if form.errors %}
-        <div class="alert alert-danger">Please correct the errors below.</div>
-    {% endif %}
-
-    <form method="post" action="{% url 'submit_pain_zones' %}">
-        {% csrf_token %}
-        <div class="zone-checkboxes">
-            {% for value, label in form.zones.field.choices %}
-                <label class="zone-label">
-                    <input type="checkbox" name="zones" value="{{ value }}"
-                        {% if value in form.zones.value %}checked{% endif %}>
-                    {{ label }}
-                </label>
-            {% endfor %}
-        </div>
-        {% if form.zones.errors %}
-            <p class="error-text">{{ form.zones.errors.0 }}</p>
-        {% endif %}
-
-        <div class="form-group mt-3">
-            <label for="id_note">Additional notes (optional)</label>
-            {{ form.note }}
-        </div>
-
-        <button type="submit" class="btn btn-primary mt-3">Submit Report</button>
-    </form>
-
-    {% if latest_pain_report %}
-        <div class="mt-3">
-            <p><strong>Last submitted:</strong> {{ latest_pain_report.timestamp|date:"N j, Y H:i" }} UTC</p>
-            <p><strong>Zones:</strong> {{ latest_pain_report.zones|join:", " }}</p>
-        </div>
-    {% endif %}
-</div>
-
-<!-- Feedback submission card -->
-<div class="card feedback-card">
-    <h3>Provide Feedback</h3>
-    <p>Help us improve the system by sharing your observations about sensor readings.</p>
-    <a href="{% url 'submit_feedback' %}" class="btn btn-info">Submit Feedback</a>
 </div>
 {% endblock %}
 

@@ -36,12 +36,12 @@
             {% for feedback in feedbacks %}
             <tr>
                 <td><strong>{{ feedback.user.username }}</strong></td>
-                <td>Frame #{{ feedback.pressure_frame.id }}<br><small>{{ feedback.pressure_frame.timestamp|date:"M d, Y H:i" }}</small></td>
-                <td>{{ feedback.feedback_text|truncatechars:50 }}</td>
+                <td>Record #{{ feedback.sensor_data.id }}<br><small>{{ feedback.sensor_data.timestamp|date:"M d, Y H:i" }}</small></td>
+                <td>{{ feedback.comment|truncatechars:50 }}</td>
                 <td>
                     <span class="badge badge-{{ feedback.status }}">{{ feedback.get_status_display }}</span>
                 </td>
-                <td>{{ feedback.timestamp|date:"M d, Y H:i" }}</td>
+                <td>{{ feedback.created_at|date:"M d, Y H:i" }}</td>
                 <td>
                     <a href="{% url 'feedback_detail' feedback.id %}" class="btn-sm btn-info">Review</a>
                     <a href="{% url 'delete_feedback' feedback.id %}" class="btn-sm btn-danger">Delete</a>

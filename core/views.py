@@ -1,6 +1,9 @@
-from datetime import timedelta, timezone
+import csv
+import io
 import json
+from datetime import datetime, timedelta
 
+from django.db import IntegrityError
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -8,8 +11,33 @@ from django.contrib.auth import login, logout, authenticate
 from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
 
-from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
-from .forms import CommentForm, AssignmentForm, PainZoneReportForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm, FeedbackForm, FeedbackAdminForm
+from django.utils import timezone
+from collections import defaultdict
+
+from .models import (
+    User, PressureFrame, ClinicianProfile, ClinicianPatientAssignment,
+    PatientProfile, Comment, PainZoneReport, HeatmapAnnotation, PREDEFINED_ZONES,
+    SensorData, Feedback
+)
+from .forms import (
+    CommentForm, ClinicianPatientAssignmentForm, UserForm,
+    ClinicianProfileForm, PatientProfileForm,
+    CustomUserCreationForm, PainZoneReportForm, FeedbackForm, FeedbackAdminForm,
+)
+
+# DRF imports
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
+from .serializers import UserSerializer, ClinicianPatientAssignmentSerializer, SensorDataSerializer, FeedbackSerializer
+from .permissions import IsAdmin, IsClinician, IsPatient, IsOwnerOrAssignedClinician
+
+# Temporary merge branch 2
 
 
 class HomeView(View):
@@ -31,27 +59,38 @@ class HomeView(View):
 class PatientDashboardView(LoginRequiredMixin, View):
     login_url = 'login'
 
-    def get(self, request, form=None):
+    def get(self, request):
         if request.user.role != User.ROLE_PATIENT:
             return redirect('home')
-        if form is None:
-            form = PainZoneReportForm()
-        latest_pain_report = PainZoneReport.objects.filter(
-            user=request.user
-        ).order_by('-timestamp').first()
-        return render(request, 'core/patient_dashboard.html', {
-            'zone_choices': PREDEFINED_ZONES,
-            'latest_pain_report': latest_pain_report,
+
+        pain_zones = PainZoneReport.objects.filter(user=request.user).order_by('-timestamp').first()
+        annotations = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp')[:5]
+        latest_pain_report = PainZoneReport.objects.filter(user=request.user).order_by('-timestamp').first()
+        form = PainZoneReportForm()
+
+        context = {
             'form': form,
-        })
+            'zone_choices': PREDEFINED_ZONES,
+            'pain_zones': pain_zones,
+            'annotations': annotations,
+            'latest_pain_report': latest_pain_report,
+        }
+        return render(request, 'core/patient_dashboard.html', context)
 
 
 class SubmitPainZonesView(LoginRequiredMixin, View):
     login_url = 'login'
 
+    def get(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return HttpResponseForbidden()
+
+        form = PainZoneReportForm()
+        return render(request, 'core/submit_pain_zones.html', {'form': form})
+
     def post(self, request):
         if request.user.role != User.ROLE_PATIENT:
-            return HttpResponseForbidden("Patients only")
+            return HttpResponseForbidden()
 
         form = PainZoneReportForm(request.POST)
         if form.is_valid():
@@ -63,8 +102,7 @@ class SubmitPainZonesView(LoginRequiredMixin, View):
             messages.success(request, "Pain zones submitted successfully")
             return redirect('patient_dashboard')
 
-        # Validation failed — re-render dashboard with bound form
-        return PatientDashboardView().get(request, form=form)
+        return render(request, 'core/submit_pain_zones.html', {'form': form})
 
 
 class PatientStatusAPIView(LoginRequiredMixin, View):
@@ -72,65 +110,60 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
 
     def get(self, request):
         if request.user.role != User.ROLE_PATIENT:
-            return JsonResponse({"error": "forbidden"}, status=403)
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
 
         try:
             hours = int(request.GET.get('hours', 1))
-        except (ValueError, TypeError):
+            if hours not in [1, 6, 24]:
+                hours = 1
+        except ValueError:
             hours = 1
-        if hours not in (1, 6, 24):
-            hours = 1
+
+        latest_frame = PressureFrame.objects.filter(user=request.user).order_by('-timestamp').first()
+        latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp').first()
+
+        alert = latest_frame.high_pressure_flag if latest_frame else False
+        latest_ppi = latest_frame.peak_pressure_index if latest_frame else None
+        latest_contact = latest_frame.contact_area_percentage if latest_frame else None
+        latest_matrix = latest_frame.raw_matrix if latest_frame else None
+        saved_annotation = latest_annotation.cells if latest_annotation else []
 
         now = timezone.now()
-        since = now - timedelta(hours=hours)
+        cutoff = now - timedelta(hours=hours)
+
         frames = PressureFrame.objects.filter(
-            user=request.user, timestamp__gte=since
+            user=request.user,
+            timestamp__gte=cutoff,
         ).order_by('timestamp')
 
-        if not frames.exists():
-            return JsonResponse({
-                "alert": False,
-                "latest_ppi": None,
-                "latest_contact": None,
-                "latest_matrix": None,
-                "chart_data": {"labels": [], "counts": []},
-            })
+        high_pressure_frames = frames.filter(high_pressure_flag=True)
 
-        latest = frames.last()
+        if frames.exists():
+            num_buckets = hours + 1
+            labels = [f"Hour {i}" for i in range(num_buckets)]
+            counts = [0] * num_buckets
 
-        # Build hour buckets for chart_data — sorted chronologically
-        # Use datetime objects as keys so cross-midnight windows don't collide on "%H:%M" strings
-        ordered_bucket_times = []
-        bucket_counts = {}
-        for offset in range(hours + 1):  # +1 to include the current hour
-            bucket_time = (now - timedelta(hours=hours - offset)).replace(
-                minute=0, second=0, microsecond=0
-            )
-            if bucket_time not in bucket_counts:
-                ordered_bucket_times.append(bucket_time)
-                bucket_counts[bucket_time] = 0
+            for frame in high_pressure_frames:
+                elapsed = now - frame.timestamp
+                bucket_idx = min(int(elapsed.total_seconds() // 3600), num_buckets - 1)
+                counts[bucket_idx] += 1
+        else:
+            labels = []
+            counts = []
 
-        for frame in frames:
-            if frame.high_pressure_flag:
-                bucket_time = frame.timestamp.replace(
-                    minute=0, second=0, microsecond=0
-                )
-                if bucket_time in bucket_counts:
-                    bucket_counts[bucket_time] += 1
+        data = {
+            'alert': alert,
+            'latest_ppi': latest_ppi,
+            'latest_contact': latest_contact,
+            'latest_matrix': latest_matrix,
+            'saved_annotation': saved_annotation,
+            'chart_data': {
+                'labels': labels,
+                'counts': counts,
+            }
+        }
 
-        labels = [bt.strftime("%H:%M") for bt in ordered_bucket_times]
-        counts = [bucket_counts[bt] for bt in ordered_bucket_times]
-
-        latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).first()
-
-        return JsonResponse({
-            "alert": latest.high_pressure_flag,
-            "latest_ppi": latest.peak_pressure_index,
-            "latest_contact": latest.contact_area_percentage,
-            "latest_matrix": latest.raw_matrix,
-            "chart_data": {"labels": labels, "counts": counts},
-            "saved_annotation": latest_annotation.cells if latest_annotation else [],
-        })
+        return JsonResponse(data)
 
 
 class SaveHeatmapAnnotationView(LoginRequiredMixin, View):
@@ -138,25 +171,22 @@ class SaveHeatmapAnnotationView(LoginRequiredMixin, View):
 
     def post(self, request):
         if request.user.role != User.ROLE_PATIENT:
-            return JsonResponse({"error": "forbidden"}, status=403)
+            return JsonResponse({'status': 'error', 'error': 'Unauthorized'}, status=403)
+
         try:
-            body = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "invalid JSON"}, status=400)
+            data = json.loads(request.body)
+            cells = data.get('cells', [])
+            note = data.get('note', '')
 
-        cells = body.get('cells', [])
-        note = body.get('note', '')
+            annotation = HeatmapAnnotation.objects.create(
+                user=request.user,
+                cells=cells,
+                note=note
+            )
 
-        if not isinstance(cells, list):
-            return JsonResponse({"error": "cells must be a list"}, status=400)
-        for cell in cells:
-            if not (isinstance(cell, list) and len(cell) == 2 and
-                    isinstance(cell[0], int) and isinstance(cell[1], int) and
-                    0 <= cell[0] < 32 and 0 <= cell[1] < 32):
-                return JsonResponse({"error": "invalid cell coordinates"}, status=400)
-
-        HeatmapAnnotation.objects.create(user=request.user, cells=cells, note=note)
-        return JsonResponse({"status": "saved", "count": len(cells)})
+            return JsonResponse({'status': 'saved', 'count': len(cells), 'id': annotation.id})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'error': str(e)}, status=400)
 
 
 class ClinicianDashboardView(LoginRequiredMixin, View):
@@ -166,25 +196,80 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_CLINICIAN:
             return redirect('home')
         try:
-            profile = ClinicianProfile.objects.get(user=request.user)
-            assignments = Assignment.objects.filter(clinician=profile).select_related('patient__user')
-        except ClinicianProfile.DoesNotExist:
-            assignments = []
+            assigned_patients = ClinicianPatientAssignment.objects.filter(clinician=request.user).values_list('patient', flat=True)
+            assignments = ClinicianPatientAssignment.objects.filter(clinician=request.user).select_related('patient')
 
-        patients_data = []
+            patients_data = []
+            for assignment in assignments:
+                patient_user = assignment.patient
+                latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
+                latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
+                matrix_json = 'null'
+                if latest_frame:
+                    try:
+                        matrix_json = json.dumps(latest_frame.raw_matrix)
+                    except (TypeError, ValueError):
+                        matrix_json = 'null'
+                cells_json = '[]'
+                if latest_annotation:
+                    try:
+                        cells_json = json.dumps(latest_annotation.cells)
+                    except (TypeError, ValueError):
+                        cells_json = '[]'
+                patients_data.append({
+                    'assignment': assignment,
+                    'latest_frame': latest_frame,
+                    'latest_annotation': latest_annotation,
+                    'matrix_json': matrix_json,
+                    'cells_json': cells_json,
+                })
+
+            return render(request, 'core/clinician_dashboard.html', {'patients_data': patients_data})
+        except Exception as e:
+            # Log the error and return a simple error page
+            return render(request, 'core/clinician_dashboard.html', {'patients_data': [], 'error': str(e)})
+
+
+class ClinicianDashboardDataAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_CLINICIAN:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        assignments = ClinicianPatientAssignment.objects.filter(clinician=request.user).select_related('patient')
+        patients = []
         for assignment in assignments:
-            patient_user = assignment.patient.user
-            latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
-            latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
-            patients_data.append({
-                'assignment': assignment,
-                'latest_frame': latest_frame,
-                'latest_annotation': latest_annotation,
-                'matrix_json': json.dumps(latest_frame.raw_matrix) if latest_frame else 'null',
-                'cells_json': json.dumps(latest_annotation.cells) if latest_annotation else '[]',
+            patient = assignment.patient
+            latest_frame = PressureFrame.objects.filter(user=patient).order_by('-timestamp').first()
+            latest_annotation = HeatmapAnnotation.objects.filter(user=patient).order_by('-timestamp').first()
+            latest_matrix = None
+            if latest_frame:
+                try:
+                    latest_matrix = latest_frame.raw_matrix
+                except:
+                    latest_matrix = None
+            annotation_cells = []
+            if latest_annotation:
+                try:
+                    annotation_cells = latest_annotation.cells
+                except:
+                    annotation_cells = []
+            patients.append({
+                'id': patient.id,
+                'name': patient.get_full_name() or patient.username,
+                'email': patient.email,
+                'latest_matrix': latest_matrix,
+                'latest_ppi': latest_frame.peak_pressure_index if latest_frame else None,
+                'latest_contact': latest_frame.contact_area_percentage if latest_frame else None,
+                'high_pressure': latest_frame.high_pressure_flag if latest_frame else False,
+                'pressure_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
+                'annotation_cells': annotation_cells,
+                'annotation_note': latest_annotation.note if latest_annotation else '',
+                'annotation_timestamp': latest_annotation.timestamp.isoformat() if latest_annotation else None,
             })
 
-        return render(request, 'core/clinician_dashboard.html', {'patients_data': patients_data})
+        return JsonResponse({'patients': patients})
 
 
 class AdminDashboardView(LoginRequiredMixin, View):
@@ -202,7 +287,7 @@ class AssignmentListView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
-        assignments = Assignment.objects.select_related('clinician__user', 'patient__user').all()
+        assignments = ClinicianPatientAssignment.objects.select_related('clinician', 'patient').all()
         return render(request, 'core/assignment_list.html', {'assignments': assignments})
 
 
@@ -212,15 +297,19 @@ class CreateAssignmentView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
-        form = AssignmentForm()
+        form = ClinicianPatientAssignmentForm()
         return render(request, 'core/assignment_form.html', {'form': form, 'action': 'Create'})
 
     def post(self, request):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
-        form = AssignmentForm(request.POST)
+        form = ClinicianPatientAssignmentForm(request.POST)
         if form.is_valid():
-            form.save()
+            try:
+                form.save()
+            except IntegrityError:
+                form.add_error(None, 'This assignment already exists.')
+                return render(request, 'core/assignment_form.html', {'form': form, 'action': 'Create'})
             return redirect('assignment_list')
         return render(request, 'core/assignment_form.html', {'form': form, 'action': 'Create'})
 
@@ -231,13 +320,13 @@ class DeleteAssignmentView(LoginRequiredMixin, View):
     def get(self, request, assignment_id):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
-        assignment = get_object_or_404(Assignment, pk=assignment_id)
+        assignment = get_object_or_404(ClinicianPatientAssignment, pk=assignment_id)
         return render(request, 'core/assignment_confirm_delete.html', {'assignment': assignment})
 
     def post(self, request, assignment_id):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
-        assignment = get_object_or_404(Assignment, pk=assignment_id)
+        assignment = get_object_or_404(ClinicianPatientAssignment, pk=assignment_id)
         assignment.delete()
         return redirect('assignment_list')
 
@@ -292,7 +381,12 @@ class EditUserView(LoginRequiredMixin, View):
         user = get_object_or_404(User, pk=user_id)
         form = UserForm(request.POST, instance=user)
         if form.is_valid():
-            form.save()
+            user = form.save()
+            # Ensure profile exists based on role
+            if user.role == User.ROLE_CLINICIAN and not hasattr(user, 'clinician_profile'):
+                ClinicianProfile.objects.create(user=user)
+            elif user.role == User.ROLE_PATIENT and not hasattr(user, 'patient_profile'):
+                PatientProfile.objects.create(user=user)
             return redirect('user_list')
         return render(request, 'core/user_form.html', {'form': form, 'action': 'Edit', 'editing': True})
 
@@ -405,21 +499,26 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
         if request.user.role not in [User.ROLE_PATIENT, User.ROLE_CLINICIAN]:
             return redirect('home')
         
-        # Filter available frames based on user role
+        # Limit to recent sensor data only (last 100 records or last 7 days)
+        cutoff_date = timezone.now() - timedelta(days=7)
+        
         if request.user.role == User.ROLE_PATIENT:
-            frames = PressureFrame.objects.filter(user=request.user)
+            sensor_records = SensorData.objects.filter(
+                user=request.user
+            ).filter(
+                timestamp__gte=cutoff_date
+            ).order_by('-timestamp')[:100]
         elif request.user.role == User.ROLE_CLINICIAN:
-            try:
-                profile = ClinicianProfile.objects.get(user=request.user)
-                assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
-                frames = PressureFrame.objects.filter(user__in=assigned_patients)
-            except ClinicianProfile.DoesNotExist:
-                frames = PressureFrame.objects.none()
+            assigned_patients = ClinicianPatientAssignment.objects.filter(clinician=request.user).values_list('patient', flat=True)
+            sensor_records = SensorData.objects.filter(
+                user__in=assigned_patients,
+                timestamp__gte=cutoff_date
+            ).order_by('-timestamp')[:100]
         else:
-            frames = PressureFrame.objects.none()
+            sensor_records = SensorData.objects.none()
         
         form = FeedbackForm()
-        form.fields['pressure_frame'].queryset = frames
+        form.fields['sensor_data'].queryset = sensor_records
         return render(request, 'core/feedback_submit.html', {'form': form})
 
     def post(self, request):
@@ -428,20 +527,14 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
         
         form = FeedbackForm(request.POST)
         if form.is_valid():
-            frame = form.cleaned_data['pressure_frame']
+            sensor_data = form.cleaned_data['sensor_data']
             
-            # Additional permission check
-            if request.user.role == User.ROLE_PATIENT and frame.user != request.user:
+            if request.user.role == User.ROLE_PATIENT and sensor_data.user != request.user:
                 messages.error(request, "You can only submit feedback on your own sensor data")
                 return redirect('submit_feedback')
             elif request.user.role == User.ROLE_CLINICIAN:
-                try:
-                    profile = ClinicianProfile.objects.get(user=request.user)
-                    if not Assignment.objects.filter(clinician=profile, patient__user=frame.user).exists():
-                        messages.error(request, "You are not assigned to this patient")
-                        return redirect('submit_feedback')
-                except ClinicianProfile.DoesNotExist:
-                    messages.error(request, "Clinician profile not found")
+                if not ClinicianPatientAssignment.objects.filter(clinician=request.user, patient=sensor_data.user).exists():
+                    messages.error(request, "You are not assigned to this patient")
                     return redirect('submit_feedback')
             
             feedback = form.save(commit=False)
@@ -450,20 +543,25 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
             messages.success(request, "Feedback submitted successfully")
             return redirect('patient_dashboard' if request.user.role == User.ROLE_PATIENT else 'clinician_dashboard')
         
-        # If form is invalid, re-render with errors
-        if request.user.role == User.ROLE_PATIENT:
-            frames = PressureFrame.objects.filter(user=request.user)
-        elif request.user.role == User.ROLE_CLINICIAN:
-            try:
-                profile = ClinicianProfile.objects.get(user=request.user)
-                assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
-                frames = PressureFrame.objects.filter(user__in=assigned_patients)
-            except ClinicianProfile.DoesNotExist:
-                frames = PressureFrame.objects.none()
-        else:
-            frames = PressureFrame.objects.none()
+        # Limit to recent sensor data only
+        cutoff_date = timezone.now() - timedelta(days=7)
         
-        form.fields['pressure_frame'].queryset = frames
+        if request.user.role == User.ROLE_PATIENT:
+            sensor_records = SensorData.objects.filter(
+                user=request.user
+            ).filter(
+                timestamp__gte=cutoff_date
+            ).order_by('-timestamp')[:100]
+        elif request.user.role == User.ROLE_CLINICIAN:
+            assigned_patients = ClinicianPatientAssignment.objects.filter(clinician=request.user).values_list('patient', flat=True)
+            sensor_records = SensorData.objects.filter(
+                user__in=assigned_patients,
+                timestamp__gte=cutoff_date
+            ).order_by('-timestamp')[:100]
+        else:
+            sensor_records = SensorData.objects.none()
+        
+        form.fields['sensor_data'].queryset = sensor_records
         return render(request, 'core/feedback_submit.html', {'form': form})
 
 
@@ -474,7 +572,7 @@ class FeedbackListView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_ADMIN:
             return redirect('home')
         
-        feedbacks = Feedback.objects.select_related('user', 'pressure_frame', 'reviewed_by').all()
+        feedbacks = Feedback.objects.select_related('user', 'sensor_data', 'reviewed_by').all()
         return render(request, 'core/feedback_list.html', {'feedbacks': feedbacks})
 
 
@@ -512,6 +610,267 @@ class FeedbackDetailView(LoginRequiredMixin, View):
             return redirect('feedback_list')
         
         return render(request, 'core/feedback_detail.html', {'feedback': feedback, 'form': form})
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['role', 'username', 'email']
+    ordering_fields = ['username', 'email', 'role']
+
+
+class ClinicianPatientAssignmentViewSet(viewsets.ModelViewSet):
+    queryset = ClinicianPatientAssignment.objects.select_related('clinician', 'patient').all()
+    serializer_class = ClinicianPatientAssignmentSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['clinician', 'patient']
+    ordering_fields = ['assigned_at']
+
+
+class SensorDataViewSet(viewsets.ModelViewSet):
+    queryset = SensorData.objects.all()
+    serializer_class = SensorDataSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['user', 'timestamp', 'sensor_id', 'location']
+    ordering_fields = ['timestamp', 'user']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == User.ROLE_ADMIN:
+            return SensorData.objects.all()
+        if user.role == User.ROLE_PATIENT:
+            return SensorData.objects.filter(user=user)
+        if user.role == User.ROLE_CLINICIAN:
+            assigned_patient_ids = ClinicianPatientAssignment.objects.filter(clinician=user).values_list('patient_id', flat=True)
+            return SensorData.objects.filter(user_id__in=assigned_patient_ids)
+        return SensorData.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        sensor_data_user = serializer.validated_data.get('user')
+        if user.role == User.ROLE_PATIENT and sensor_data_user != user:
+            raise PermissionDenied("Patients can only upload their own sensor data.")
+        if user.role == User.ROLE_CLINICIAN and not ClinicianPatientAssignment.objects.filter(clinician=user, patient=sensor_data_user).exists():
+            raise PermissionDenied("You are not assigned to this patient.")
+        serializer.save()
+
+
+class FeedbackViewSet(viewsets.ModelViewSet):
+    queryset = Feedback.objects.all()
+    serializer_class = FeedbackSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['user', 'sensor_data', 'status', 'reviewed_by']
+    ordering_fields = ['created_at', 'status']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == User.ROLE_ADMIN:
+            return Feedback.objects.all()
+        if user.role == User.ROLE_PATIENT:
+            return Feedback.objects.filter(user=user)
+        if user.role == User.ROLE_CLINICIAN:
+            patient_ids = ClinicianPatientAssignment.objects.filter(clinician=user).values_list('patient_id', flat=True)
+            return Feedback.objects.filter(sensor_data__user_id__in=patient_ids)
+        return Feedback.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        sensor_data = serializer.validated_data['sensor_data']
+        if user.role == User.ROLE_PATIENT and sensor_data.user != user:
+            raise PermissionDenied("Patients can only submit feedback for their own sensor data.")
+        if user.role == User.ROLE_CLINICIAN and not ClinicianPatientAssignment.objects.filter(clinician=user, patient=sensor_data.user).exists():
+            raise PermissionDenied("You are not assigned to this patient.")
+        serializer.save(user=user)
+
+
+class CSVUploadViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def create(self, request, *args, **kwargs):
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response({'detail': 'CSV file is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            text = uploaded_file.read().decode('utf-8')
+            reader = csv.DictReader(io.StringIO(text))
+            created = 0
+            errors = []
+            for i, row in enumerate(reader, start=1):
+                try:
+                    username = row.get('user') or row.get('username') or row.get('patient')
+                    if not username:
+                        raise ValueError('Missing user identifier')
+                    user = User.objects.get(username=username)
+                    if user.role != User.ROLE_PATIENT:
+                        raise ValueError('CSV rows must reference patient user accounts')
+
+                    timestamp_str = row.get('timestamp')
+                    if not timestamp_str:
+                        raise ValueError('Missing timestamp')
+                    timestamp = datetime.fromisoformat(timestamp_str)
+                    if timezone.is_naive(timestamp):
+                        timestamp = timezone.make_aware(timestamp)
+
+                    pressure_value = float(row.get('pressure_value') or row.get('pressure'))
+                    sensor_id = row.get('sensor_id', '')
+                    location = row.get('location', '')
+
+                    SensorData.objects.create(
+                        user=user,
+                        timestamp=timestamp,
+                        pressure_value=pressure_value,
+                        sensor_id=sensor_id,
+                        location=location,
+                    )
+                    created += 1
+                except Exception as exc:
+                    errors.append({'row': i, 'error': str(exc), 'data': row})
+
+            return Response({'created': created, 'errors': errors})
+        except Exception as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminPatientCSVUploadView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        patients = User.objects.filter(role=User.ROLE_PATIENT)
+        return render(request, 'core/admin_patient_csv_upload.html', {'patients': patients})
+
+    def post(self, request):
+        if request.user.role != User.ROLE_ADMIN:
+            return redirect('home')
+        
+        patient_id = request.POST.get('patient_id')
+        files = request.FILES.getlist('file')
+        
+        if not patient_id:
+            messages.error(request, 'Please select a patient.')
+            patients = User.objects.filter(role=User.ROLE_PATIENT)
+            return render(request, 'core/admin_patient_csv_upload.html', {'patients': patients})
+        
+        if len(files) > 5:
+            messages.error(request, 'You can upload a maximum of 5 CSV files at once.')
+            patients = User.objects.filter(role=User.ROLE_PATIENT)
+            return render(request, 'core/admin_patient_csv_upload.html', {'patients': patients})
+        
+        if not files:
+            messages.error(request, 'Please upload at least one CSV file.')
+            patients = User.objects.filter(role=User.ROLE_PATIENT)
+            return render(request, 'core/admin_patient_csv_upload.html', {'patients': patients})
+        
+        try:
+            patient = get_object_or_404(User, pk=patient_id, role=User.ROLE_PATIENT)
+            
+            total_created = 0
+            total_errors = 0
+            
+            for uploaded_file in files:
+                try:
+                    # Read and decode file
+                    if uploaded_file.size == 0:
+                        messages.warning(request, f'{uploaded_file.name} is empty.')
+                        continue
+                    
+                    text = uploaded_file.read().decode('utf-8', errors='replace')
+                    if not text.strip():
+                        messages.warning(request, f'{uploaded_file.name} is empty or not readable.')
+                        continue
+                    
+                    reader = csv.DictReader(io.StringIO(text))
+                    
+                    # Accept any CSV format
+                    if not reader.fieldnames:
+                        messages.error(request, f'{uploaded_file.name}: CSV appears to be empty or malformed.')
+                        total_errors += 1
+                        continue
+                    
+                    created = 0
+                    errors = []
+                    records_to_create = []
+                    
+                    for i, row in enumerate(reader, start=2):
+                        try:
+                            # Skip completely empty rows
+                            if not any(row.values()):
+                                continue
+                            
+                            # Parse timestamp if available, otherwise use current time
+                            timestamp = None
+                            timestamp_str = row.get('timestamp', '').strip()
+                            if timestamp_str:
+                                try:
+                                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                                    if timezone.is_naive(timestamp):
+                                        timestamp = timezone.make_aware(timestamp)
+                                except (ValueError, TypeError):
+                                    timestamp = timezone.now()
+                            else:
+                                timestamp = timezone.now()
+                            
+                            # Parse pressure_value if available
+                            pressure_value = 0
+                            pressure_str = row.get('pressure_value') or row.get('pressure') or ''
+                            if pressure_str:
+                                try:
+                                    pressure_value = float(pressure_str)
+                                except (ValueError, TypeError):
+                                    pressure_value = 0
+                            
+                            sensor_id = row.get('sensor_id', '').strip() if row.get('sensor_id') else ''
+                            location = row.get('location', '').strip() if row.get('location') else ''
+                            
+                            records_to_create.append(SensorData(
+                                user=patient,
+                                timestamp=timestamp,
+                                pressure_value=pressure_value,
+                                sensor_id=sensor_id,
+                                location=location,
+                            ))
+                        except Exception as exc:
+                            errors.append({'row': i, 'error': str(exc)})
+                    
+                    # Bulk create all records at once
+                    if records_to_create:
+                        SensorData.objects.bulk_create(records_to_create)
+                        created = len(records_to_create)
+                    
+                    total_created += created
+                    total_errors += len(errors)
+                    
+                    if created > 0:
+                        messages.success(request, f'✓ {uploaded_file.name}: Uploaded {created} records.')
+                    if errors:
+                        error_summary = ', '.join([f"row {e['row']}: {e['error']}" for e in errors[:3]])
+                        if len(errors) > 3:
+                            error_summary += f", and {len(errors) - 3} more"
+                        messages.warning(request, f'{uploaded_file.name}: {len(errors)} errors - {error_summary}')
+                
+                except Exception as file_exc:
+                    messages.error(request, f'Error processing {uploaded_file.name}: {str(file_exc)}')
+                    total_errors += 1
+            
+            if total_created > 0:
+                messages.success(request, f'✓ Total: {total_created} sensor data records uploaded for {patient.get_full_name() or patient.username}.')
+            if total_errors > 0 and total_created == 0:
+                messages.error(request, f'Failed to upload any records. Please check the file and try again.')
+            
+            patients = User.objects.filter(role=User.ROLE_PATIENT)
+            return render(request, 'core/admin_patient_csv_upload.html', {'patients': patients})
+        except Exception as exc:
+            messages.error(request, f'Error: {str(exc)}')
+            patients = User.objects.filter(role=User.ROLE_PATIENT)
+            return render(request, 'core/admin_patient_csv_upload.html', {'patients': patients})
 
 
 class DeleteFeedbackView(LoginRequiredMixin, View):

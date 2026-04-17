@@ -5,7 +5,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sensore.settings')
 django.setup()
 
-from core.models import User, PatientProfile, ClinicianProfile, Assignment
+from core.models import User, PatientProfile, ClinicianProfile, ClinicianPatientAssignment
 
 # Create sample clinician
 if not User.objects.filter(username='clinician1').exists():
@@ -39,8 +39,8 @@ patient = User.objects.get(username='patient1')
 clinician_profile = ClinicianProfile.objects.get(user=clinician)
 patient_profile = PatientProfile.objects.get(user=patient)
 
-if not Assignment.objects.filter(clinician=clinician_profile, patient=patient_profile).exists():
-    Assignment.objects.create(clinician=clinician_profile, patient=patient_profile)
+if not ClinicianPatientAssignment.objects.filter(clinician=clinician, patient=patient).exists():
+    ClinicianPatientAssignment.objects.create(clinician=clinician, patient=patient)
     print("✓ Assignment created: clinician1 → patient1")
 else:
     print("✓ Assignment already exists")

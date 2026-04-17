@@ -1,0 +1,11 @@
+timestamp,pressure_value,sensor_id,location
+2023-01-01T12:00:00,150,sensor1,upper_back
+2023-01-01T12:01:00,165,sensor1,upper_back
+2023-01-01T12:02:00,142,sensor1,upper_back
+2023-01-01T12:03:00,158,sensor1,upper_back
+2023-01-01T12:04:00,172,sensor1,upper_back
+2023-01-01T12:05:00,145,sensor2,lower_back
+2023-01-01T12:06:00,160,sensor2,lower_back
+2023-01-01T12:07:00,155,sensor2,lower_back
+2023-01-01T12:08:00,168,sensor2,lower_back
+2023-01-01T12:09:00,150,sensor2,lower_back

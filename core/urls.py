@@ -1,8 +1,17 @@
 from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .auth import LoginView, LogoutView
 from . import views
 
+router = DefaultRouter()
+router.register(r'api/users', views.UserViewSet)
+router.register(r'api/assignments', views.ClinicianPatientAssignmentViewSet)
+router.register(r'api/sensor-data', views.SensorDataViewSet)
+router.register(r'api/feedback', views.FeedbackViewSet)
+router.register(r'api/csv-upload', views.CSVUploadViewSet, basename='csv-upload')
+
 urlpatterns = [
+    path('api/', include(router.urls)),
     path('', views.HomeView.as_view(), name='home'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
@@ -11,6 +20,7 @@ urlpatterns = [
     path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
     path('patient/api/heatmap-annotation/', views.SaveHeatmapAnnotationView.as_view(), name='save_heatmap_annotation'),
     path('clinician/', views.ClinicianDashboardView.as_view(), name='clinician_dashboard'),
+    path('clinician/api/dashboard/', views.ClinicianDashboardDataAPIView.as_view(), name='clinician_dashboard_api'),
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
     
     # Assignment Management
@@ -29,6 +39,7 @@ urlpatterns = [
     
     # Patient Management
     path('manage/patients/', views.PatientListView.as_view(), name='patient_list'),
+    path('manage/patients/upload-csv/', views.AdminPatientCSVUploadView.as_view(), name='admin_patient_csv_upload'),
     
     # Pressure Data Management
     path('manage/pressure-data/', views.PressureDataListView.as_view(), name='pressure_data_list'),

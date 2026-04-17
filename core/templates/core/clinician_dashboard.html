@@ -8,6 +8,12 @@
     <p>Manage your assigned patients</p>
 </div>
 
+{% if error %}
+<div class="alert alert-danger">
+    <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
 <div class="card">
     <h3>Assigned Patients</h3>
     {% if patients_data %}
@@ -17,7 +23,7 @@
                 <h4>{{ pd.assignment.patient.user.first_name|default:pd.assignment.patient.user.username }}</h4>
                 <p class="text-secondary" style="font-size:0.85rem;margin-bottom:0.5rem;">{{ pd.assignment.patient.user.email }}</p>
 
-                <div class="heatmap-wrapper heatmap-sm">
+                <div class="heatmap-wrapper heatmap-sm" data-patient-id="{{ pd.assignment.patient.id }}">
                     <canvas class="patient-heatmap" width="192" height="192"
                             data-matrix="{{ pd.matrix_json }}"
                             data-cells="{{ pd.cells_json }}"></canvas>
@@ -55,6 +61,7 @@
 
 {% block scripts %}
 <script src="{% static 'js/heatmap.js' %}"></script>
+<script src="{% static 'js/clinician_dashboard.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.clinician-patient-card').forEach(function (card) {
@@ -63,15 +70,23 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!heatmapCanvas) return;
 
         var matrix = null;
-        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) {}
+        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) { console.error('Error parsing matrix', e); }
         var cells = [];
-        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) {}
+        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) { console.error('Error parsing cells', e); }
 
         if (matrix && Array.isArray(matrix)) {
-            drawHeatmapOnCanvas(heatmapCanvas, matrix);
+            try {
+                drawHeatmapOnCanvas(heatmapCanvas, matrix);
+            } catch (e) {
+                console.error('Error drawing heatmap', e);
+            }
         }
         if (cells && cells.length > 0) {
-            drawAnnotationOnCanvas(annotCanvas, cells);
+            try {
+                drawAnnotationOnCanvas(annotCanvas, cells);
+            } catch (e) {
+                console.error('Error drawing annotation', e);
+            }
         }
     });
 });

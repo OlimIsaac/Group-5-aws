@@ -5,3 +5,5 @@ pandas
 numpy
 scipy
 reportlab
+djangorestframework-simplejwt
+django-filter
