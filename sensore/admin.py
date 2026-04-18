@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import SensorSession, SensorFrame, PressureMetrics, Comment, PressureAlert, Report
+
+from .models import (Comment, PressureAlert, PressureMetrics, Report,
+                     SensorFrame, SensorSession)
+
 
 @admin.register(SensorSession)
 class SensorSessionAdmin(admin.ModelAdmin):

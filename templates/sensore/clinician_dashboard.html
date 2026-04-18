@@ -137,21 +137,13 @@
             {% else %}
               <span>No sessions yet</span>
             {% endif %}
-            <span>📊 Avg risk: {{ ps.avg_risk|floatformat:0 }}/100</span>
-            <span>💬 {{ ps.comments_count }} comment{{ ps.comments_count|pluralize }}</span>
             {% if ps.unack_alerts > 0 %}
               <span class="alert-count">⚠ {{ ps.unack_alerts }} alert{{ ps.unack_alerts|pluralize }}</span>
             {% endif %}
           </div>
           <div class="flex items-center justify-between">
             <span class="risk-badge {{ ps.latest_risk }}">{{ ps.latest_risk|capfirst }} Risk</span>
-            <span class="text-muted" style="font-size:0.74rem">
-              {% if ps.previous_avg_risk is not None %}
-                Δ {{ ps.avg_risk|floatformat:1 }} vs {{ ps.previous_avg_risk|floatformat:1 }}
-              {% else %}
-                trend {{ ps.risk_trend }}
-              {% endif %}
-            </span>
+            <span class="text-muted" style="font-size:0.8rem">View →</span>
           </div>
         </div>
         {% empty %}
@@ -216,26 +208,6 @@
     </div>
   </div>
 
-  {% if comment_stream %}
-  <div class="card" style="margin-top:1.25rem">
-    <div class="card-header">
-      <span class="card-title">Latest Patient Comments</span>
-      <span class="mono" style="font-size:0.72rem;color:var(--mist)">Context stream</span>
-    </div>
-    <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-      {% for item in comment_stream|slice:":8" %}
-      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0.7rem 0.9rem">
-        <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px">
-          <strong style="font-size:0.8rem;color:var(--teal)">{{ item.session.patient.get_full_name|default:item.session.patient.username }}</strong>
-          <span style="font-size:0.68rem;color:var(--mist);font-family:var(--font-mono)">{{ item.created_at|date:"d M H:i" }}</span>
-        </div>
-        <div style="font-size:0.82rem;color:var(--pale)">{{ item.text|truncatechars:120 }}</div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
 </div>
 {% endblock %}
 
@@ -283,11 +255,6 @@ async function openPatientDetail(patientId, name) {
     <tr>
       <td class="mono" style="font-size:0.8rem">${s.date}</td>
       <td>${s.frame_count} frames</td>
-      <td>
-        <span class="risk-badge ${s.avg_risk_score >= 75 ? 'critical' : (s.avg_risk_score >= 50 ? 'high' : (s.avg_risk_score >= 25 ? 'moderate' : 'low'))}" style="font-size:0.62rem">
-          ${Number(s.avg_risk_score || 0).toFixed(0)}
-        </span>
-      </td>
       <td>${s.flagged ? '<span style="color:var(--amber)">⚑ Flagged</span>' : '<span style="color:var(--green)">Clear</span>'}</td>
       <td>
         <button class="btn btn-sm btn-secondary" onclick="loadSessionDetail(${s.id})">View Heatmap</button>
@@ -300,7 +267,7 @@ async function openPatientDetail(patientId, name) {
       <div>
         <div class="card-title mb-1" style="font-size:0.75rem;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">Sessions</div>
         <table class="alert-table" style="width:100%">
-          <thead><tr><th>Date</th><th>Frames</th><th>Risk</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Date</th><th>Frames</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -399,7 +366,6 @@ async function loadSessionDetail(sessionId) {
         </span>
       </div>
       <div style="font-size:0.875rem;color:var(--pale);margin-bottom:6px">${escHtml(c.text)}</div>
-      ${c.metadata?.pain_zones?.length ? `<div style="font-size:0.72rem;color:var(--amber);margin-bottom:4px">🩹 ${c.metadata.pain_zones.map(z => escHtml(String(z).replaceAll('_',' '))).join(', ')}</div>` : ''}
       <div style="font-size:0.7rem;color:var(--mist)">📍 ${new Date(c.timestamp).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'})}</div>
       ${c.replies?.length ? `
         <div style="margin-top:8px;padding-left:1rem;border-left:2px solid rgba(245,158,11,0.3)">

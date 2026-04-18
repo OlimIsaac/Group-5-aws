@@ -1,22 +1,21 @@
-import json
-import io
 import csv
+import io
+import json
 from datetime import date, datetime, timedelta
 
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_GET
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_GET
 
-from .models import SensorSession, SensorFrame, PressureMetrics, Comment, PressureAlert, Report
-from .utils import (
-    analyse_session_frames,
-    generate_session_report_data,
-    get_risk_level,
-)
 from accounts.models import UserProfile
+
+from .models import (Comment, PressureAlert, PressureMetrics, Report,
+                     SensorFrame, SensorSession)
+from .utils import (analyse_session_frames, generate_session_report_data,
+                    get_risk_level)
 
 User = get_user_model()
 
@@ -607,12 +606,14 @@ def patient_report(request, patient_id=None):
 def generate_pdf_report(context):
     """Generate a PDF report using reportlab."""
     try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import mm, cm
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import cm, mm
+        from reportlab.platypus import (HRFlowable, Paragraph,
+                                        SimpleDocTemplate, Spacer, Table,
+                                        TableStyle)
 
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm,

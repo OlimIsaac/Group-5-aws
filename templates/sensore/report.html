@@ -112,41 +112,10 @@
       </div>
     </div>
     <div class="report-actions">
-      <a href="?download=1{% if filter_start %}&start={{ filter_start }}{% endif %}{% if filter_end %}&end={{ filter_end }}{% endif %}{% if selected_window %}&window={{ selected_window }}{% endif %}" class="btn btn-primary">
+      <a href="?download=1" class="btn btn-primary">
         ⬇ Download PDF
       </a>
-      <a href="?download_csv=1{% if filter_start %}&start={{ filter_start }}{% endif %}{% if filter_end %}&end={{ filter_end }}{% endif %}{% if selected_window %}&window={{ selected_window }}{% endif %}" class="btn btn-secondary">
-        ⬇ Download CSV
-      </a>
       <button class="btn btn-secondary" onclick="window.print()">🖨 Print</button>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:1.1rem">
-    <div class="card-body" style="padding:0.9rem 1.1rem">
-      <form method="get" class="grid-4" style="align-items:end">
-        <div class="form-group">
-          <label class="form-label">Window</label>
-          <select class="form-control" name="window">
-            <option value="all" {% if selected_window == 'all' %}selected{% endif %}>All</option>
-            <option value="7d" {% if selected_window == '7d' %}selected{% endif %}>Last 7 days</option>
-            <option value="14d" {% if selected_window == '14d' %}selected{% endif %}>Last 14 days</option>
-            <option value="30d" {% if selected_window == '30d' %}selected{% endif %}>Last 30 days</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Start date</label>
-          <input type="date" class="form-control" name="start" value="{{ filter_start }}" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">End date</label>
-          <input type="date" class="form-control" name="end" value="{{ filter_end }}" />
-        </div>
-        <div class="flex gap-1">
-          <button type="submit" class="btn btn-primary">Apply</button>
-          <a class="btn btn-secondary" href="{% if patient.id == request.user.id %}/report/{% else %}/report/{{ patient.id }}/{% endif %}">Reset</a>
-        </div>
-      </form>
     </div>
   </div>
 
@@ -232,25 +201,9 @@
           <span><div class="risk-dot" style="background:var(--red)"></div> High: {{ dist.high }}</span>
           <span><div class="risk-dot" style="background:var(--purple)"></div> Critical: {{ dist.critical }}</span>
         </div>
-        <div class="metric-sub" style="margin-top:0.35rem">
-          High-risk ratio: {{ d.high_risk_ratio }}% · Trend: {{ d.risk_trend|capfirst }}
-        </div>
       </div>
       {% endif %}
       {% endwith %}
-
-      {% if d.predicted_hotspots %}
-      <div style="margin-bottom:1rem">
-        <div class="metric-label mb-1">Predicted high-pressure areas</div>
-        <div style="display:flex;flex-wrap:wrap;gap:0.45rem">
-          {% for p in d.predicted_hotspots %}
-          <span class="risk-badge moderate" style="font-size:0.64rem">
-            x{{ p.x }} y{{ p.y }} · {{ p.confidence }}%
-          </span>
-          {% endfor %}
-        </div>
-      </div>
-      {% endif %}
 
       <!-- Comments for this session -->
       {% with comments=s.comments.all %}

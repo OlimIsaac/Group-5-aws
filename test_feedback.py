@@ -1,13 +1,13 @@
-from django.test import TestCase
-from django.urls import reverse
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-
 import unittest
 
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
 try:
+    from core.forms import FeedbackAdminForm, FeedbackForm
     from core.models import Feedback, SensorData
-    from core.forms import FeedbackForm, FeedbackAdminForm
 except Exception as exc:  # pragma: no cover - legacy compatibility only
     raise unittest.SkipTest(f"Legacy core tests skipped: {exc}")
 

@@ -9,7 +9,6 @@ from accounts.models import UserProfile
 from sensore.models import Comment, SensorFrame, SensorSession
 from sensore.utils import analyse_session_frames
 
-
 User = get_user_model()
 
 

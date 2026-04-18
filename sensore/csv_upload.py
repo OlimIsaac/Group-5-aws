@@ -22,20 +22,20 @@ Filename convention (auto-parsed for session date):
 import csv
 import io
 import json
-import re
 import os
-from datetime import datetime, date
+import re
+from datetime import date, datetime
 
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
+from django.utils import timezone
 
-from sensore.models import SensorSession, SensorFrame
+from accounts.models import UserProfile
+from sensore.models import SensorFrame, SensorSession
 from sensore.utils import analyse_session_frames, normalise_frame
 from sensore.views import get_user_role, user_can_access_patient
-from accounts.models import UserProfile
 
 User = get_user_model()
 
