@@ -1,25 +1,134 @@
 import json
 import io
-from datetime import datetime, timedelta
+import csv
+from datetime import date, datetime, timedelta
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_GET
 from django.utils import timezone
-from django.db.models import Avg, Max, Count
 
 from .models import SensorSession, SensorFrame, PressureMetrics, Comment, PressureAlert, Report
-from .utils import analyse_frame, generate_session_report_data, get_risk_level
+from .utils import (
+    analyse_session_frames,
+    generate_session_report_data,
+    get_risk_level,
+)
 from accounts.models import UserProfile
+
+User = get_user_model()
+
+PAIN_ZONE_CHOICES = [
+    ('lower_back', 'Lower Back'),
+    ('left_hip', 'Left Hip'),
+    ('right_hip', 'Right Hip'),
+    ('left_thigh', 'Left Thigh'),
+    ('right_thigh', 'Right Thigh'),
+    ('tailbone', 'Tailbone'),
+    ('left_shoulder', 'Left Shoulder'),
+    ('right_shoulder', 'Right Shoulder'),
+]
+
+
+def ensure_user_profile(user):
+    """Ensure every authenticated user has a profile."""
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    if not profile.role:
+        profile.role = 'admin' if (user.is_staff or user.is_superuser) else 'patient'
+        profile.save(update_fields=['role'])
+    return profile
 
 
 def get_user_role(user):
-    try:
-        return user.profile.role
-    except Exception:
+    if not user or not user.is_authenticated:
         return 'patient'
+    return ensure_user_profile(user).role
+
+
+def get_accessible_patients(user):
+    """Return patient queryset visible to the current user."""
+    role = get_user_role(user)
+    if role == 'admin':
+        return User.objects.filter(profile__role='patient').select_related('profile')
+    if role == 'clinician':
+        return User.objects.filter(
+            profile__role='patient',
+            profile__assigned_clinician=user,
+        ).select_related('profile')
+    return User.objects.filter(id=user.id)
+
+
+def user_can_access_patient(user, patient):
+    role = get_user_role(user)
+    if role == 'admin':
+        return True
+    if role == 'patient':
+        return patient.id == user.id
+    if role == 'clinician':
+        return UserProfile.objects.filter(
+            user=patient,
+            role='patient',
+            assigned_clinician=user,
+        ).exists()
+    return False
+
+
+def user_can_access_session(user, session):
+    return user_can_access_patient(user, session.patient)
+
+
+def serialise_metrics(metrics):
+    return {
+        'ppi': metrics.peak_pressure_index,
+        'contact_area': metrics.contact_area_percent,
+        'avg_pressure': metrics.average_pressure,
+        'asymmetry': metrics.asymmetry_score,
+        'pressure_variability': metrics.pressure_variability,
+        'pressure_concentration': metrics.pressure_concentration,
+        'movement_index': metrics.movement_index,
+        'sustained_load_index': metrics.sustained_load_index,
+        'center_of_pressure_x': metrics.center_of_pressure_x,
+        'center_of_pressure_y': metrics.center_of_pressure_y,
+        'risk_score': metrics.risk_score,
+        'risk_level': metrics.risk_level,
+        'hot_zones': metrics.get_hot_zones(),
+        'plain_english': metrics.plain_english,
+    }
+
+
+def serialise_comment(comment_obj):
+    replies = Comment.objects.filter(reply_to=comment_obj).order_by('created_at')
+    return {
+        'id': comment_obj.id,
+        'author': comment_obj.author.get_full_name() or comment_obj.author.username,
+        'author_type': comment_obj.author_type,
+        'text': comment_obj.text,
+        'timestamp': comment_obj.timestamp_reference.isoformat(),
+        'created_at': comment_obj.created_at.isoformat(),
+        'frame_id': comment_obj.frame_id,
+        'metadata': comment_obj.metadata or {},
+        'replies': [
+            {
+                'id': reply.id,
+                'author': reply.author.get_full_name() or reply.author.username,
+                'author_type': reply.author_type,
+                'text': reply.text,
+                'created_at': reply.created_at.isoformat(),
+                'metadata': reply.metadata or {},
+            }
+            for reply in replies
+        ],
+    }
+
+
+def parse_time_view_hours(raw_value):
+    try:
+        value = int(str(raw_value))
+    except (TypeError, ValueError):
+        return 1
+    return value if value in (1, 6, 24) else 1
 
 
 @login_required
@@ -36,6 +145,9 @@ def dashboard(request):
 def patient_dashboard(request):
     """Main patient dashboard with heatmap, metrics, and comments."""
     user = request.user
+    role = get_user_role(user)
+    if role in ('clinician', 'admin'):
+        return redirect('clinician_dashboard')
 
     sessions = SensorSession.objects.filter(patient=user).order_by('-session_date', '-start_time')
     latest_session = sessions.first()
@@ -48,11 +160,23 @@ def patient_dashboard(request):
 
     alerts = PressureAlert.objects.filter(session__patient=user, acknowledged=False).order_by('-created_at')[:5]
 
+    selected_time_view = request.GET.get('view', '1')
+    if selected_time_view not in {'1', '6', '24'}:
+        selected_time_view = '1'
+
+    recent_pain_notes = Comment.objects.filter(
+        session__patient=user,
+        metadata__pain_zones__isnull=False,
+    ).order_by('-created_at')[:8]
+
     context = {
         'sessions': sessions[:10],
         'selected_session': selected_session,
         'alerts': alerts,
         'role': 'patient',
+        'selected_time_view': selected_time_view,
+        'pain_zone_choices': PAIN_ZONE_CHOICES,
+        'recent_pain_notes': recent_pain_notes,
     }
     return render(request, 'sensore/patient_dashboard.html', context)
 
@@ -64,33 +188,60 @@ def clinician_dashboard(request):
     if role not in ('clinician', 'admin'):
         return redirect('patient_dashboard')
 
-    try:
-        patients = request.user.patients.all()
-        patient_users = User.objects.filter(profile__in=patients)
-    except Exception:
-        patient_users = User.objects.filter(profile__role='patient')
+    patient_users = get_accessible_patients(request.user)
 
     patient_summaries = []
     for patient in patient_users:
         latest_session = SensorSession.objects.filter(patient=patient).order_by('-start_time').first()
         unack_alerts = PressureAlert.objects.filter(session__patient=patient, acknowledged=False).count()
+        comments_count = Comment.objects.filter(session__patient=patient).count()
         latest_risk = 'unknown'
+        avg_risk = 0.0
+        risk_trend = 'stable'
+        predicted_hotspots = []
+        previous_avg_risk = None
         if latest_session:
+            report_data = generate_session_report_data(latest_session)
+            avg_risk = report_data.get('avg_risk_score', 0.0)
+            risk_trend = report_data.get('risk_trend', 'stable')
+            predicted_hotspots = report_data.get('predicted_hotspots', [])
             latest_frame = latest_session.frames.order_by('-timestamp').first()
             if latest_frame and hasattr(latest_frame, 'metrics'):
                 latest_risk = latest_frame.metrics.risk_level
+
+            previous_session = SensorSession.objects.filter(patient=patient).exclude(
+                id=latest_session.id
+            ).order_by('-start_time').first()
+            if previous_session:
+                previous_data = generate_session_report_data(previous_session)
+                previous_avg_risk = previous_data.get('avg_risk_score')
+
         patient_summaries.append({
             'user': patient,
             'latest_session': latest_session,
             'unack_alerts': unack_alerts,
             'latest_risk': latest_risk,
+            'avg_risk': avg_risk,
+            'risk_trend': risk_trend,
+            'predicted_hotspots': predicted_hotspots,
+            'comments_count': comments_count,
+            'previous_avg_risk': previous_avg_risk,
         })
 
-    all_alerts = PressureAlert.objects.filter(acknowledged=False).order_by('-created_at')[:10]
+    all_alerts = PressureAlert.objects.filter(
+        session__patient__in=patient_users,
+        acknowledged=False,
+    ).order_by('-created_at')[:20]
+
+    comment_stream = Comment.objects.filter(
+        session__patient__in=patient_users,
+        is_reply=False,
+    ).select_related('author', 'session__patient').order_by('-created_at')[:25]
 
     context = {
         'patient_summaries': patient_summaries,
         'all_alerts': all_alerts,
+        'comment_stream': comment_stream,
         'role': role,
     }
     return render(request, 'sensore/clinician_dashboard.html', context)
@@ -104,12 +255,25 @@ def api_session_frames(request, session_id):
     """Return all frames for a session with metrics."""
     session = get_object_or_404(SensorSession, id=session_id)
 
-    # Patients can only see their own data
-    if get_user_role(request.user) == 'patient' and session.patient != request.user:
+    if not user_can_access_session(request.user, session):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
+    has_metrics = PressureMetrics.objects.filter(frame__session=session).exists()
+    if not has_metrics:
+        analyse_session_frames(session, create_alerts=True)
+
+    hours = parse_time_view_hours(request.GET.get('hours', 1))
+    latest_frame = session.frames.order_by('-timestamp').first()
+    cutoff = None
+    if latest_frame:
+        cutoff = latest_frame.timestamp - timedelta(hours=hours)
+
+    frames_qs = session.frames.select_related('metrics').order_by('frame_index')
+    if cutoff is not None:
+        frames_qs = frames_qs.filter(timestamp__gte=cutoff)
+
     frames_data = []
-    for frame in session.frames.prefetch_related('metrics').order_by('frame_index')[:500]:
+    for frame in frames_qs[:1200]:
         frame_dict = {
             'id': frame.id,
             'frame_index': frame.frame_index,
@@ -117,20 +281,15 @@ def api_session_frames(request, session_id):
             'data': json.loads(frame.data),
         }
         if hasattr(frame, 'metrics'):
-            m = frame.metrics
-            frame_dict['metrics'] = {
-                'ppi': m.peak_pressure_index,
-                'contact_area': m.contact_area_percent,
-                'avg_pressure': m.average_pressure,
-                'asymmetry': m.asymmetry_score,
-                'risk_score': m.risk_score,
-                'risk_level': m.risk_level,
-                'hot_zones': m.get_hot_zones(),
-                'plain_english': m.plain_english,
-            }
+            frame_dict['metrics'] = serialise_metrics(frame.metrics)
         frames_data.append(frame_dict)
 
-    return JsonResponse({'frames': frames_data, 'session_id': session_id})
+    return JsonResponse({
+        'frames': frames_data,
+        'session_id': session_id,
+        'time_view_hours': hours,
+        'total_frames_in_session': session.frame_count,
+    })
 
 
 @login_required
@@ -138,12 +297,16 @@ def api_session_frames(request, session_id):
 def api_latest_frame(request, session_id):
     """Return the latest frame with full metrics."""
     session = get_object_or_404(SensorSession, id=session_id)
-    if get_user_role(request.user) == 'patient' and session.patient != request.user:
+    if not user_can_access_session(request.user, session):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
     frame = session.frames.order_by('-frame_index').first()
     if not frame:
         return JsonResponse({'error': 'No frames'}, status=404)
+
+    if not hasattr(frame, 'metrics'):
+        analyse_session_frames(session, create_alerts=True)
+        frame.refresh_from_db()
 
     data = {
         'id': frame.id,
@@ -152,17 +315,7 @@ def api_latest_frame(request, session_id):
         'data': json.loads(frame.data),
     }
     if hasattr(frame, 'metrics'):
-        m = frame.metrics
-        data['metrics'] = {
-            'ppi': m.peak_pressure_index,
-            'contact_area': m.contact_area_percent,
-            'avg_pressure': m.average_pressure,
-            'asymmetry': m.asymmetry_score,
-            'risk_score': m.risk_score,
-            'risk_level': m.risk_level,
-            'hot_zones': m.get_hot_zones(),
-            'plain_english': m.plain_english,
-        }
+        data['metrics'] = serialise_metrics(frame.metrics)
     return JsonResponse(data)
 
 
@@ -173,7 +326,7 @@ def api_frame_detail(request, frame_id):
     frame = get_object_or_404(SensorFrame, id=frame_id)
     session = frame.session
 
-    if get_user_role(request.user) == 'patient' and session.patient != request.user:
+    if not user_can_access_session(request.user, session):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
     data = {
@@ -183,17 +336,7 @@ def api_frame_detail(request, frame_id):
         'data': json.loads(frame.data),
     }
     if hasattr(frame, 'metrics'):
-        m = frame.metrics
-        data['metrics'] = {
-            'ppi': m.peak_pressure_index,
-            'contact_area': m.contact_area_percent,
-            'avg_pressure': m.average_pressure,
-            'asymmetry': m.asymmetry_score,
-            'risk_score': m.risk_score,
-            'risk_level': m.risk_level,
-            'hot_zones': m.get_hot_zones(),
-            'plain_english': m.plain_english,
-        }
+        data['metrics'] = serialise_metrics(frame.metrics)
     return JsonResponse(data)
 
 
@@ -202,10 +345,43 @@ def api_frame_detail(request, frame_id):
 def api_session_metrics_timeline(request, session_id):
     """Return timeline of metrics for charts."""
     session = get_object_or_404(SensorSession, id=session_id)
-    if get_user_role(request.user) == 'patient' and session.patient != request.user:
+    if not user_can_access_session(request.user, session):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
+    has_metrics = PressureMetrics.objects.filter(frame__session=session).exists()
+    if not has_metrics:
+        analyse_session_frames(session, create_alerts=True)
+
     report_data = generate_session_report_data(session)
+
+    hours = parse_time_view_hours(request.GET.get('hours', 1))
+    timeline = report_data.get('timeline', [])
+    if timeline:
+        last_time = datetime.fromisoformat(timeline[-1]['timestamp'])
+        cutoff = last_time - timedelta(hours=hours)
+        timeline = [
+            point for point in timeline
+            if datetime.fromisoformat(point['timestamp']) >= cutoff
+        ]
+        report_data['timeline'] = timeline
+        report_data['time_view_hours'] = hours
+
+    previous_session = SensorSession.objects.filter(patient=session.patient).exclude(
+        id=session.id,
+    ).order_by('-start_time').first()
+    if previous_session:
+        previous_data = generate_session_report_data(previous_session)
+        report_data['comparison'] = {
+            'previous_session_id': previous_session.id,
+            'previous_date': str(previous_session.session_date),
+            'previous_avg_risk': previous_data.get('avg_risk_score', 0),
+            'risk_change': round(
+                report_data.get('avg_risk_score', 0) - previous_data.get('avg_risk_score', 0),
+                1,
+            ),
+            'previous_avg_ppi': previous_data.get('avg_ppi', 0),
+        }
+
     return JsonResponse(report_data)
 
 
@@ -217,8 +393,7 @@ def api_add_comment(request, session_id):
 
     session = get_object_or_404(SensorSession, id=session_id)
 
-    # Patients can only comment on their own sessions
-    if get_user_role(request.user) == 'patient' and session.patient != request.user:
+    if not user_can_access_session(request.user, session):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
     try:
@@ -229,6 +404,15 @@ def api_add_comment(request, session_id):
     text = body.get('text', '').strip()
     frame_id = body.get('frame_id')
     timestamp_str = body.get('timestamp')
+    pain_zones = body.get('pain_zones') or []
+    pain_points = body.get('pain_points') or []
+    if isinstance(pain_zones, str):
+        pain_zones = [z.strip() for z in pain_zones.split(',') if z.strip()]
+
+    if not isinstance(pain_points, list):
+        pain_points = []
+
+    source = (body.get('source') or 'dashboard').strip()[:60]
 
     if not text:
         return JsonResponse({'error': 'Comment text required'}, status=400)
@@ -244,12 +428,44 @@ def api_add_comment(request, session_id):
     if timestamp_str:
         try:
             ref_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+            if timezone.is_naive(ref_time):
+                ref_time = timezone.make_aware(ref_time, timezone.get_current_timezone())
         except Exception:
             pass
     elif frame:
         ref_time = frame.timestamp
 
+    if frame is None:
+        frames = list(session.frames.order_by('timestamp')[:2000])
+        if frames:
+            frame = min(
+                frames,
+                key=lambda f: abs((f.timestamp - ref_time).total_seconds()),
+            )
+
+    allowed_zones = {z for z, _ in PAIN_ZONE_CHOICES}
+    clean_zones = [z for z in pain_zones if isinstance(z, str) and z in allowed_zones][:8]
+
+    clean_points = []
+    for point in pain_points[:12]:
+        if not isinstance(point, dict):
+            continue
+        try:
+            x = int(point.get('x'))
+            y = int(point.get('y'))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= x <= 31 and 0 <= y <= 31:
+            clean_points.append({'x': x, 'y': y})
+
     role = get_user_role(request.user)
+    comment_metadata = {
+        'pain_zones': clean_zones,
+        'pain_points': clean_points,
+        'source': source,
+        'time_view_hours': parse_time_view_hours(body.get('time_view')),
+    }
+
     comment = Comment.objects.create(
         session=session,
         author=request.user,
@@ -257,16 +473,10 @@ def api_add_comment(request, session_id):
         frame=frame,
         timestamp_reference=ref_time,
         text=text,
+        metadata=comment_metadata,
     )
 
-    return JsonResponse({
-        'id': comment.id,
-        'author': request.user.get_full_name() or request.user.username,
-        'author_type': comment.author_type,
-        'text': comment.text,
-        'timestamp': comment.timestamp_reference.isoformat(),
-        'created_at': comment.created_at.isoformat(),
-    })
+    return JsonResponse(serialise_comment(comment))
 
 
 @login_required
@@ -274,29 +484,11 @@ def api_add_comment(request, session_id):
 def api_session_comments(request, session_id):
     """Return all comments for a session."""
     session = get_object_or_404(SensorSession, id=session_id)
-    if get_user_role(request.user) == 'patient' and session.patient != request.user:
+    if not user_can_access_session(request.user, session):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
-    comments = Comment.objects.filter(session=session, is_reply=False).order_by('created_at')
-    data = []
-    for c in comments:
-        replies = Comment.objects.filter(reply_to=c).order_by('created_at')
-        data.append({
-            'id': c.id,
-            'author': c.author.get_full_name() or c.author.username,
-            'author_type': c.author_type,
-            'text': c.text,
-            'timestamp': c.timestamp_reference.isoformat(),
-            'created_at': c.created_at.isoformat(),
-            'frame_id': c.frame_id,
-            'replies': [{
-                'id': r.id,
-                'author': r.author.get_full_name() or r.author.username,
-                'author_type': r.author_type,
-                'text': r.text,
-                'created_at': r.created_at.isoformat(),
-            } for r in replies],
-        })
+    comments = Comment.objects.filter(session=session, is_reply=False).select_related('author').order_by('created_at')
+    data = [serialise_comment(comment) for comment in comments]
     return JsonResponse({'comments': data})
 
 
@@ -307,21 +499,61 @@ def api_acknowledge_alert(request, alert_id):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     alert = get_object_or_404(PressureAlert, id=alert_id)
+    if not user_can_access_session(request.user, alert.session):
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
+    if alert.acknowledged:
+        return JsonResponse({'status': 'already_acknowledged'})
+
     alert.acknowledged = True
     alert.acknowledged_by = request.user
-    alert.save()
-    return JsonResponse({'status': 'acknowledged'})
+    alert.save(update_fields=['acknowledged', 'acknowledged_by'])
+    remaining = PressureAlert.objects.filter(
+        session__patient=alert.session.patient,
+        acknowledged=False,
+    ).count()
+    return JsonResponse({'status': 'acknowledged', 'remaining_unacknowledged': remaining})
 
 
 @login_required
 def patient_report(request, patient_id=None):
     """View and generate a downloadable medical history report."""
-    if patient_id and get_user_role(request.user) in ('clinician', 'admin'):
+    if patient_id:
         patient = get_object_or_404(User, id=patient_id)
+        if not user_can_access_patient(request.user, patient):
+            return HttpResponse('Forbidden', status=403)
     else:
         patient = request.user
 
+    if not user_can_access_patient(request.user, patient):
+        return HttpResponse('Forbidden', status=403)
+
     sessions = SensorSession.objects.filter(patient=patient).order_by('-session_date')
+
+    filter_start = request.GET.get('start', '').strip()
+    filter_end = request.GET.get('end', '').strip()
+    selected_window = request.GET.get('window', 'all').strip().lower()
+
+    def _parse_date(value):
+        try:
+            return datetime.strptime(value, '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            return None
+
+    start_date = _parse_date(filter_start)
+    end_date = _parse_date(filter_end)
+
+    if selected_window in {'7d', '14d', '30d'}:
+        days = int(selected_window.replace('d', ''))
+        start_date = date.today() - timedelta(days=days)
+        if not end_date:
+            end_date = date.today()
+
+    if start_date:
+        sessions = sessions.filter(session_date__gte=start_date)
+    if end_date:
+        sessions = sessions.filter(session_date__lte=end_date)
+
 
     # Build per-session summaries
     session_summaries = []
@@ -358,7 +590,13 @@ def patient_report(request, patient_id=None):
         'overall_risk_level': get_risk_level(avg_risk),
         'generated_at': timezone.now(),
         'download': download,
+        'filter_start': start_date.isoformat() if start_date else '',
+        'filter_end': end_date.isoformat() if end_date else '',
+        'selected_window': selected_window,
     }
+
+    if request.GET.get('format') == 'csv' or request.GET.get('download_csv') == '1':
+        return generate_csv_report(context)
 
     if download:
         return generate_pdf_report(context)
@@ -501,21 +739,82 @@ def generate_pdf_report(context):
                             content_type='text/plain', status=500)
 
 
+def generate_csv_report(context):
+    """Generate CSV report download for patient sessions."""
+    response = HttpResponse(content_type='text/csv')
+    patient = context['patient']
+    patient_name = (patient.get_full_name() or patient.username).replace(' ', '_')
+    response['Content-Disposition'] = f'attachment; filename="Sensore_Report_{patient_name}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['Sensore Medical History Report'])
+    writer.writerow(['Patient', patient.get_full_name() or patient.username])
+    writer.writerow(['Username', patient.username])
+    writer.writerow(['Generated at', context['generated_at'].isoformat()])
+    writer.writerow([])
+    writer.writerow(['Summary'])
+    writer.writerow(['Average PPI', context['avg_ppi']])
+    writer.writerow(['Average Contact Area', context['avg_area']])
+    writer.writerow(['Average Risk Score', context['avg_risk']])
+    writer.writerow(['Overall Risk Level', context['overall_risk_level']])
+    writer.writerow(['Total High/Critical Events', context['total_high_risk']])
+    writer.writerow([])
+
+    writer.writerow([
+        'Session Date',
+        'Frames',
+        'Average PPI',
+        'Max PPI',
+        'Average Contact Area',
+        'Average Risk Score',
+        'Peak Risk Level',
+        'High Risk Ratio (%)',
+        'Risk Trend',
+    ])
+    for item in context['session_summaries']:
+        session = item['session']
+        data = item['data']
+        writer.writerow([
+            session.session_date,
+            data.get('frame_count', 0),
+            data.get('avg_ppi', 0),
+            data.get('max_ppi', 0),
+            data.get('avg_contact_area', 0),
+            data.get('avg_risk_score', 0),
+            data.get('peak_risk_level', ''),
+            data.get('high_risk_ratio', 0),
+            data.get('risk_trend', ''),
+        ])
+
+    return response
+
+
 @login_required
 @require_GET
 def api_patient_sessions(request, patient_id):
     """Return sessions for a patient (clinician use)."""
     if get_user_role(request.user) not in ('clinician', 'admin'):
         return JsonResponse({'error': 'Forbidden'}, status=403)
+
     patient = get_object_or_404(User, id=patient_id)
+    if not user_can_access_patient(request.user, patient):
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
     sessions = SensorSession.objects.filter(patient=patient).order_by('-session_date')[:20]
-    data = [{
-        'id': s.id,
-        'date': str(s.session_date),
-        'start_time': s.start_time.isoformat(),
-        'frame_count': s.frame_count,
-        'flagged': s.flagged_for_review,
-    } for s in sessions]
+    data = []
+    for session in sessions:
+        report_data = generate_session_report_data(session)
+        data.append({
+            'id': session.id,
+            'date': str(session.session_date),
+            'start_time': session.start_time.isoformat(),
+            'frame_count': session.frame_count,
+            'flagged': session.flagged_for_review,
+            'avg_risk_score': report_data.get('avg_risk_score', 0),
+            'risk_trend': report_data.get('risk_trend', 'stable'),
+            'high_risk_ratio': report_data.get('high_risk_ratio', 0),
+            'predicted_hotspots': report_data.get('predicted_hotspots', []),
+        })
     return JsonResponse({'sessions': data})
 
 @login_required
@@ -529,14 +828,21 @@ def api_reply_comment(request, comment_id):
         return JsonResponse({'error': 'Only clinicians can reply'}, status=403)
 
     parent = get_object_or_404(Comment, id=comment_id)
+    if not user_can_access_session(request.user, parent.session):
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
     try:
         body = json.loads(request.body)
     except json.JSONDecodeError:
         body = request.POST
 
     text = body.get('text', '').strip()
+    recommendation_level = (body.get('recommendation_level') or '').strip().lower()
     if not text:
         return JsonResponse({'error': 'Reply text required'}, status=400)
+
+    if recommendation_level not in {'', 'info', 'warning', 'urgent'}:
+        recommendation_level = ''
 
     reply = Comment.objects.create(
         session=parent.session,
@@ -547,14 +853,12 @@ def api_reply_comment(request, comment_id):
         text=text,
         is_reply=True,
         reply_to=parent,
+        metadata={
+            'recommendation_level': recommendation_level,
+            'source': 'clinician_reply',
+        },
     )
-    return JsonResponse({
-        'id': reply.id,
-        'author': request.user.get_full_name() or request.user.username,
-        'author_type': 'clinician',
-        'text': reply.text,
-        'created_at': reply.created_at.isoformat(),
-    })
+    return JsonResponse(serialise_comment(reply))
 
 
 @login_required
@@ -566,6 +870,41 @@ def api_flag_session(request, session_id):
         return JsonResponse({'error': 'Forbidden'}, status=403)
 
     session = get_object_or_404(SensorSession, id=session_id)
+    if not user_can_access_session(request.user, session):
+        return JsonResponse({'error': 'Forbidden'}, status=403)
+
     session.flagged_for_review = not session.flagged_for_review
-    session.save()
+    session.save(update_fields=['flagged_for_review'])
     return JsonResponse({'flagged': session.flagged_for_review})
+
+
+@login_required
+@require_GET
+def api_my_recent_sessions(request):
+    """Return recent sessions visible to the current user."""
+    role = get_user_role(request.user)
+
+    if role == 'patient':
+        sessions = SensorSession.objects.filter(patient=request.user).order_by('-start_time')[:12]
+    else:
+        patients = get_accessible_patients(request.user)
+        sessions = SensorSession.objects.filter(patient__in=patients).order_by('-start_time')[:20]
+
+    data = []
+    for session in sessions:
+        latest_frame = session.frames.order_by('-frame_index').first()
+        latest_risk = 'unknown'
+        if latest_frame and hasattr(latest_frame, 'metrics'):
+            latest_risk = latest_frame.metrics.risk_level
+        data.append({
+            'id': session.id,
+            'patient_id': session.patient.id,
+            'patient_name': session.patient.get_full_name() or session.patient.username,
+            'date': str(session.session_date),
+            'start_time': session.start_time.isoformat(),
+            'frame_count': session.frame_count,
+            'flagged': session.flagged_for_review,
+            'latest_risk': latest_risk,
+        })
+
+    return JsonResponse({'sessions': data, 'role': role})

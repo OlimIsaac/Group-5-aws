@@ -219,7 +219,20 @@
         </div>
         <div class="card-body">
           <div class="format-box">
-            
+            <strong style="color:var(--pale)">Accepted structures:</strong><br>
+            1) <code>32 columns × (32 × N) rows</code> (one frame per 32 rows)<br>
+            2) <code>1024 values per row</code> (one frame per row)<br><br>
+
+            <strong style="color:var(--pale)">Recommended filename:</strong>
+            <code>&lt;sensor_id&gt;_YYYYMMDD.csv</code><br>
+            Example: <code>de0e9b2c_20251013.csv</code><br><br>
+
+            <strong style="color:var(--pale)">Processing notes:</strong>
+            <ul style="margin:0.4rem 0 0.2rem 1rem; padding:0; color:var(--fog)">
+              <li>Values are normalised to Sensore's internal 0-4095 scale.</li>
+              <li>Frames are timestamped every 30 seconds.</li>
+              <li>Risk metrics and clinician alerts are generated automatically.</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -290,6 +303,7 @@
 const dropZone  = document.getElementById('dropZone');
 const fileInput = document.getElementById('csvFileInput');
 const fileName  = document.getElementById('dropFileName');
+const fallbackDashboardUrl = '{{ role }}' === 'patient' ? '/patient/' : '/clinician/';
 
 // ── DRAG AND DROP ──
 ['dragenter','dragover'].forEach(e =>
@@ -449,20 +463,56 @@ document.getElementById('uploadForm').addEventListener('submit', () => {
 // ── LOAD RECENT SESSIONS ──
 async function loadRecentSessions() {
   try {
-    // The patient dashboard API returns sessions for the current user
-    // We use the session selector data from patient_dashboard
-    const resp = await fetch('/api/session/0/frames/').catch(() => null);
-    // Fallback: show a message to visit dashboard
-  } catch (e) {}
+    const resp = await fetch('/api/my/sessions/');
+    if (!resp.ok) throw new Error('failed');
+    const data = await resp.json();
+    const sessions = data.sessions || [];
 
-  document.getElementById('recentSessions').innerHTML = `
-    <div style="padding:1rem 1.25rem">
-      <p style="font-size:0.85rem;color:var(--fog);margin-bottom:0.75rem">
-        After uploading, your data will appear on your dashboard.
-      </p>
-      <a href="/patient/" class="btn btn-secondary btn-sm">Go to Dashboard →</a>
-    </div>
-  `;
+    if (!sessions.length) {
+      document.getElementById('recentSessions').innerHTML = `
+        <div style="padding:1.25rem;text-align:center;color:var(--mist);font-size:0.85rem">
+          No sessions yet. Upload a CSV to create your first analysed session.
+        </div>
+      `;
+      return;
+    }
+
+    const rows = sessions.slice(0, 8).map(s => `
+      <tr>
+        <td>${escHtml(s.patient_name || '')}</td>
+        <td class="mono" style="font-size:0.75rem">${s.date}</td>
+        <td>${s.frame_count}</td>
+        <td><span class="risk-badge ${s.latest_risk || 'low'}" style="font-size:0.63rem">${(s.latest_risk || 'unknown')}</span></td>
+      </tr>
+    `).join('');
+
+    const dashboardUrl = data.role === 'patient' ? '/patient/' : '/clinician/';
+
+    document.getElementById('recentSessions').innerHTML = `
+      <table class="upload-history-table">
+        <thead>
+          <tr><th>Patient</th><th>Date</th><th>Frames</th><th>Latest Risk</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="padding:0.85rem 1rem;border-top:1px solid rgba(255,255,255,0.06)">
+        <a href="${dashboardUrl}" class="btn btn-secondary btn-sm">Go to Dashboard →</a>
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('recentSessions').innerHTML = `
+      <div style="padding:1rem 1.25rem">
+        <p style="font-size:0.85rem;color:var(--fog);margin-bottom:0.75rem">
+          After uploading, your data will appear on your dashboard.
+        </p>
+        <a href="${fallbackDashboardUrl}" class="btn btn-secondary btn-sm">Go to Dashboard →</a>
+      </div>
+    `;
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 loadRecentSessions();

@@ -1,77 +1,91 @@
 # Sensore
 
-Medical dashboard application for pressure ulcer prevention built with Django and PostgreSQL.
+Sensore is a Django pressure-monitoring web app for patients and clinicians. It visualises 32x32 pressure frames, calculates pressure risk, stores timestamped notes, and generates downloadable medical history reports.
 
-## Features
-- Role-based accounts: admin, clinician, patient
-- Processing of 32x32 pressure map CSV data
-- Heatmap visualization and metrics (PPI, contact area)
-- Commenting system linked to frames
-- PDF report generation
-- REST API endpoints for live updates
+## What It Does
 
-## Setup
-1. Create virtual environment and activate:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # or venv\Scripts\activate on Windows
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Configure environment variables (see `sensore/settings.py`):
-   - `DJANGO_SECRET_KEY`
-   - `DJANGO_DEBUG`
-   - Postgres connection vars: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`
-4. Initialize database:
-   ```bash
-   python manage.py migrate
-   ```
-5. Create superuser:
-   ```bash
-   python manage.py createsuperuser
-   ```
-6. Load initial data or ingest CSVs using utility functions.
-7. Run development server:
-   ```bash
-   python manage.py runserver
-   ```
+- Live heatmap playback for patient sitting pressure
+- Time-view switching (1h / 6h / 24h) for trend tracking
+- Plain-English pressure explanations for patients
+- Timestamp-linked patient comments and clinician replies
+- Pain-area marking (body zones + precise heatmap points)
+- PDF medical history reports for patients and clinicians
+- CSV medical history export for records and audits
+- Automatic risk scoring and alert generation for clinicians
+- CSV upload/import tools for session data
 
-## Project Structure
+## Local Setup
+
+1. Create and activate a virtual environment.
+2. Install dependencies.
+3. Run migrations.
+4. Load sample data.
+5. Start the development server.
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py load_sample_data
+python manage.py runserver
 ```
-sensore/
-├─ manage.py
-├─ sensore/          # project config
-│  ├─ settings.py
-│  ├─ urls.py
-│  └─ wsgi.py
-└─ core/             # main application
-   ├─ migrations/
-   ├─ models.py
-   ├─ views.py
-   ├─ serializers.py
-   ├─ urls.py
-   ├─ forms.py
-   ├─ utils.py       # CSV ingestion and metric calculation
-   ├─ templates/
-   └─ static/
+
+## Environment Variables
+
+- `DJANGO_SECRET_KEY`
+- `DJANGO_DEBUG` (`True` or `False`)
+- `DJANGO_ALLOWED_HOSTS` (comma-separated host list)
+- `DJANGO_CSRF_TRUSTED_ORIGINS` (comma-separated https origins)
+- `DJANGO_SECURE_SSL_REDIRECT`
+- `DJANGO_SECURE_HSTS_SECONDS`
+- `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS`
+- `DJANGO_SECURE_HSTS_PRELOAD`
+- `DJANGO_SESSION_COOKIE_SECURE`
+- `DJANGO_CSRF_COOKIE_SECURE`
+- `DJANGO_SESSION_COOKIE_SAMESITE`
+- `DJANGO_CSRF_COOKIE_SAMESITE`
+- `DJANGO_SECURE_REFERRER_POLICY`
+- `DJANGO_SECURE_PROXY_SSL_HEADER`
+- `DJANGO_DB_CONN_MAX_AGE`
+
+## Demo Accounts
+
+- Admin: `admin` / `admin123`
+- Clinician: `dr_smith` / `clinic123`
+- Patient: `patient_001` / `patient123`
+
+## Main Routes
+
+- Login: `/accounts/login/`
+- Patient dashboard: `/patient/`
+- Clinician dashboard: `/clinician/`
+- Upload CSV: `/upload/`
+- Report: `/report/`
+- Report CSV export: `/report/?download_csv=1`
+
+## Data Commands
+
+- Load sample users and sessions:
+  - `python manage.py load_sample_data`
+- Import the bundled real CSV session:
+  - `python manage.py import_real_csv --path sample_data/de0e9b2c_20251013.csv`
+- Generate large noisy preview datasets:
+  - `python manage.py generate_garbage_data --patients 12 --sessions 6 --frames 90 --comments 4`
+
+## Validation
+
+```bash
+python manage.py check
+python manage.py check --deploy
+python manage.py migrate --noinput
+python manage.py test
+python test_auth.py
+python test_login.py
 ```
 
 ## Notes
-- Use Django REST Framework for API endpoints (to be added).
-- Chart.js is referenced in frontend templates (to be created).
-- PDF reports implemented using ReportLab (not yet coded).
-- Role-based permission decorators available in `core/permissions.py` (to be added).
 
-## Migration Strategy
-1. After modeling changes, run `python manage.py makemigrations`.
-2. Inspect generated migration files, then apply with `python manage.py migrate`.
-3. Use `runscript` or custom management commands for bulk ingestion of CSV datasets.
-
-## Future Work
-- Complete views, serializers, and templates for dashboards
-- Implement heatmap JS and Chart.js graphs
-- Add REST endpoints and authentication tokens
-- Build reporting and prediction logic
-- Styling and responsive layout
+- The active settings module is `sensore_project.settings`.
+- The legacy `sensore.settings` module re-exports the same production settings for compatibility.
+- The app uses SQLite locally by default.

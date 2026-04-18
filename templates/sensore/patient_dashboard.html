@@ -23,6 +23,10 @@
     position: absolute; inset: 0;
     pointer-events: none;
   }
+  .pain-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
   .heatmap-legend {
     display: flex; align-items: center; gap: 8px;
     margin-top: 10px; font-size: 0.72rem; color: var(--mist);
@@ -123,6 +127,71 @@
     0%,100%{ box-shadow: 0 0 0 0 rgba(255,69,0,0.6); }
     50%{ box-shadow: 0 0 0 5px rgba(255,69,0,0); }
   }
+
+  .painpoint-marker {
+    position: absolute; width: 12px; height: 12px;
+    border: 2px solid rgba(245,158,11,0.95);
+    border-radius: 50%;
+    background: rgba(245,158,11,0.28);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(10,22,40,0.9);
+  }
+
+  .time-view-tabs {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: 0.5rem;
+  }
+  .tv-btn {
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: var(--fog);
+    border-radius: 6px;
+    font-size: 0.72rem;
+    padding: 4px 9px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    transition: all 0.16s;
+  }
+  .tv-btn.active {
+    border-color: rgba(0,212,200,0.45);
+    color: var(--teal);
+    background: rgba(0,212,200,0.08);
+  }
+
+  .pain-zone-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .pain-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(245,158,11,0.22);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 0.74rem;
+    color: var(--fog);
+    cursor: pointer;
+    background: rgba(255,255,255,0.03);
+    transition: all 0.16s;
+    user-select: none;
+  }
+  .pain-pill input {
+    display: none;
+  }
+  .pain-pill.active {
+    color: var(--amber);
+    border-color: rgba(245,158,11,0.45);
+    background: rgba(245,158,11,0.11);
+  }
+  .pain-points-preview {
+    font-size: 0.72rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 {% endblock %}
@@ -183,6 +252,7 @@
           <div class="heatmap-container">
             <canvas id="heatmapCanvas" width="32" height="32"></canvas>
             <div class="heatmap-overlay" id="heatmapOverlay"></div>
+            <div class="pain-overlay" id="painOverlay"></div>
           </div>
           <div class="heatmap-legend">
             <span>None</span>
@@ -204,6 +274,11 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">Risk Score Over Time</span>
+          <div class="time-view-tabs" id="timeViewTabs">
+            <button class="tv-btn" data-hours="1">1h</button>
+            <button class="tv-btn" data-hours="6">6h</button>
+            <button class="tv-btn" data-hours="24">24h</button>
+          </div>
         </div>
         <div class="card-body">
           <canvas id="metricsChart"></canvas>
@@ -221,7 +296,7 @@
           <span id="riskBadge" class="risk-badge low">Low Risk</span>
         </div>
         <div class="card-body">
-          <div class="grid-2" style="gap:1rem">
+          <div class="grid-3" style="gap:1rem">
             <div class="metric-block">
               <div class="metric-label">Peak Pressure Index</div>
               <div class="metric-value" id="metricPPI">—</div>
@@ -241,6 +316,16 @@
               <div class="metric-label">Asymmetry</div>
               <div class="metric-value" id="metricAsym">—</div>
               <div class="metric-sub">% left/right imbalance</div>
+            </div>
+            <div class="metric-block">
+              <div class="metric-label">Movement Index</div>
+              <div class="metric-value" id="metricMove">—</div>
+              <div class="metric-sub">Frame-to-frame movement</div>
+            </div>
+            <div class="metric-block">
+              <div class="metric-label">Pressure Concentration</div>
+              <div class="metric-value" id="metricConc">—</div>
+              <div class="metric-sub">Localized load intensity</div>
             </div>
           </div>
         </div>
@@ -264,6 +349,19 @@
           <span class="card-title">My Notes</span>
         </div>
         <div class="card-body" style="display:flex;flex-direction:column;gap:0.75rem">
+          <div>
+            <div class="metric-label" style="margin-bottom:0.35rem">Mark painful areas</div>
+            <div class="pain-zone-grid" id="painZoneGrid">
+              {% for value,label in pain_zone_choices %}
+              <label class="pain-pill">
+                <input type="checkbox" name="painZones" value="{{ value }}" />
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+            <div class="pain-points-preview mt-1" id="painPointsPreview">Click the heatmap to mark exact pain points (optional).</div>
+          </div>
+
           <!-- Add comment form -->
           <div class="form-group">
             <textarea id="commentText" class="form-control" placeholder="Add a note about your current position or how you're feeling..."></textarea>
@@ -292,6 +390,8 @@ let allFrames = [];
 let currentFrameIndex = 0;
 let currentSessionId = {{ selected_session.id|default:'null' }};
 let metricsChart = null;
+let currentTimeViewHours = parseInt('{{ selected_time_view|default:"1" }}', 10) || 1;
+let selectedPainPoints = [];
 
 // ── COLOUR MAP (navy → blue → cyan → yellow → red) ──
 function pressureToColour(val) {
@@ -336,9 +436,6 @@ function drawHeatmap(data32x32) {
 function updateHotZones(hotZones) {
   const overlay = document.getElementById('heatmapOverlay');
   overlay.innerHTML = '';
-  const container = document.querySelector('.heatmap-container');
-  const w = container.offsetWidth;
-  const h = container.offsetHeight;
   hotZones.slice(0, 3).forEach(z => {
     const el = document.createElement('div');
     el.className = 'hotzone-marker';
@@ -348,6 +445,25 @@ function updateHotZones(hotZones) {
   });
 }
 
+function redrawPainOverlay() {
+  const overlay = document.getElementById('painOverlay');
+  overlay.innerHTML = '';
+  selectedPainPoints.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'painpoint-marker';
+    el.style.left = ((p.x + 0.5) / 32 * 100) + '%';
+    el.style.top  = ((p.y + 0.5) / 32 * 100) + '%';
+    overlay.appendChild(el);
+  });
+
+  const preview = document.getElementById('painPointsPreview');
+  if (!selectedPainPoints.length) {
+    preview.textContent = 'Click the heatmap to mark exact pain points (optional).';
+    return;
+  }
+  preview.textContent = 'Pain points: ' + selectedPainPoints.map(p => `(${p.x},${p.y})`).join(' ');
+}
+
 // ── UPDATE METRICS DISPLAY ──
 function updateMetrics(metrics) {
   if (!metrics) return;
@@ -355,6 +471,8 @@ function updateMetrics(metrics) {
   const area = document.getElementById('metricArea');
   const risk = document.getElementById('metricRisk');
   const asym = document.getElementById('metricAsym');
+  const move = document.getElementById('metricMove');
+  const conc = document.getElementById('metricConc');
   const badge= document.getElementById('riskBadge');
   const expl = document.getElementById('explanationBox');
 
@@ -362,6 +480,8 @@ function updateMetrics(metrics) {
   area.textContent = (metrics.contact_area?.toFixed(1) ?? '—') + '%';
   risk.textContent = metrics.risk_score?.toFixed(0) ?? '—';
   asym.textContent = (metrics.asymmetry?.toFixed(1) ?? '—') + '%';
+  move.textContent = (metrics.movement_index?.toFixed(1) ?? '—');
+  conc.textContent = (metrics.pressure_concentration?.toFixed(1) ?? '—');
 
   // Colour code metric values
   const rl = metrics.risk_level || 'low';
@@ -386,7 +506,7 @@ function updateMetrics(metrics) {
 async function loadSession(sessionId) {
   currentSessionId = sessionId;
   try {
-    const resp = await fetch(`/api/session/${sessionId}/frames/`);
+    const resp = await fetch(`/api/session/${sessionId}/frames/?hours=${currentTimeViewHours}`);
     const data = await resp.json();
     allFrames = data.frames || [];
 
@@ -441,7 +561,7 @@ document.getElementById('sessionSelect').addEventListener('change', function() {
 
 // ── METRICS CHART ──
 async function loadMetricsChart(sessionId) {
-  const resp = await fetch(`/api/session/${sessionId}/metrics/`);
+  const resp = await fetch(`/api/session/${sessionId}/metrics/?hours=${currentTimeViewHours}`);
   const data = await resp.json();
   const timeline = data.timeline || [];
 
@@ -515,6 +635,7 @@ function renderComments(comments) {
         <span class="comment-time">${new Date(c.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
       </div>
       <div class="comment-text">${escHtml(c.text)}</div>
+      ${c.metadata?.pain_zones?.length ? `<div class="comment-ts">🩹 Zones: ${c.metadata.pain_zones.map(z => escHtml(z.replaceAll('_',' '))).join(', ')}</div>` : ''}
       <div class="comment-ts">📍 Ref: ${new Date(c.timestamp).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'})}</div>
       ${c.replies?.length ? `
         <div class="comment-replies">
@@ -531,18 +652,24 @@ function renderComments(comments) {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function submitComment() {
   const text = document.getElementById('commentText').value.trim();
   if (!text || !currentSessionId) return;
 
+  const selectedZones = Array.from(document.querySelectorAll('input[name="painZones"]:checked')).map(i => i.value);
+
   const currentFrame = allFrames[currentFrameIndex];
   const payload = {
     text,
     frame_id: currentFrame?.id || null,
     timestamp: currentFrame?.timestamp || new Date().toISOString(),
+    pain_zones: selectedZones,
+    pain_points: selectedPainPoints,
+    time_view: currentTimeViewHours,
+    source: 'patient_dashboard',
   };
 
   const resp = await fetch(`/api/session/${currentSessionId}/comment/`, {
@@ -553,6 +680,12 @@ async function submitComment() {
 
   if (resp.ok) {
     document.getElementById('commentText').value = '';
+    document.querySelectorAll('input[name="painZones"]').forEach(c => {
+      c.checked = false;
+      c.closest('.pain-pill')?.classList.remove('active');
+    });
+    selectedPainPoints = [];
+    redrawPainOverlay();
     loadComments(currentSessionId);
   }
 }
@@ -566,10 +699,6 @@ async function acknowledgeAlert(alertId) {
 }
 
 // ── INIT ──
-if (currentSessionId) {
-  loadSession(currentSessionId);
-}
-
 // ── AUTO-POLL: refresh latest frame every 30s ──
 let pollingInterval = null;
 
@@ -603,7 +732,46 @@ function stopPolling() {
   if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
 }
 
+function setTimeView(hours) {
+  currentTimeViewHours = hours;
+  document.querySelectorAll('#timeViewTabs .tv-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.hours, 10) === hours);
+  });
+  if (currentSessionId) {
+    loadSession(currentSessionId);
+  }
+}
+
+document.querySelectorAll('#timeViewTabs .tv-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const h = parseInt(btn.dataset.hours, 10);
+    setTimeView(h);
+  });
+});
+
+document.querySelectorAll('input[name="painZones"]').forEach(input => {
+  input.addEventListener('change', () => {
+    input.closest('.pain-pill')?.classList.toggle('active', input.checked);
+  });
+});
+
+document.getElementById('heatmapCanvas').addEventListener('click', (ev) => {
+  const rect = ev.target.getBoundingClientRect();
+  const x = Math.max(0, Math.min(31, Math.floor(((ev.clientX - rect.left) / rect.width) * 32)));
+  const y = Math.max(0, Math.min(31, Math.floor(((ev.clientY - rect.top) / rect.height) * 32)));
+
+  const existing = selectedPainPoints.findIndex(p => p.x === x && p.y === y);
+  if (existing >= 0) {
+    selectedPainPoints.splice(existing, 1);
+  } else {
+    if (selectedPainPoints.length >= 8) selectedPainPoints.shift();
+    selectedPainPoints.push({ x, y });
+  }
+  redrawPainOverlay();
+});
+
 document.getElementById("sessionSelect").addEventListener("change", () => startPolling());
 if (currentSessionId) startPolling();
+setTimeView(currentTimeViewHours);
 </script>
 {% endblock %}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+
 import django
 from django.test import Client
 
@@ -8,9 +9,9 @@ django.setup()
 
 client = Client()
 
-# Test login with admin credentials
+# Test login with the bundled admin credentials
 print("Testing admin login...")
-response = client.post('/login/', {
+response = client.post('/accounts/login/', {
     'username': 'admin',
     'password': 'admin123'
 })
