@@ -8,10 +8,12 @@
     <p>Manage your assigned patients</p>
 </div>
 
-{% if error %}
-<div class="alert alert-danger">
-    <strong>Error:</strong> {{ error }}
-</div>
+{% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
 {% endif %}
 
 <div class="card">
@@ -23,7 +25,7 @@
                 <h4>{{ pd.assignment.patient.user.first_name|default:pd.assignment.patient.user.username }}</h4>
                 <p class="text-secondary" style="font-size:0.85rem;margin-bottom:0.5rem;">{{ pd.assignment.patient.user.email }}</p>
 
-                <div class="heatmap-wrapper heatmap-sm" data-patient-id="{{ pd.assignment.patient.id }}">
+                <div class="heatmap-wrapper heatmap-sm">
                     <canvas class="patient-heatmap" width="192" height="192"
                             data-matrix="{{ pd.matrix_json }}"
                             data-cells="{{ pd.cells_json }}"></canvas>
@@ -54,14 +56,243 @@
 </div>
 
 <div class="card">
-    <h3>Flagged Events</h3>
-    <div id="flaggedEvents">No flagged events</div>
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>Pressure Alerts</h3>
+        <span id="alertCount"
+              data-high-count="{{ high_pressure_events|length }}"
+              data-average-count="{{ average_pressure_events|length }}"
+              data-low-count="{{ low_pressure_events|length }}"
+              style="font-size:0.85rem;color:#666;">{{ high_pressure_events|length }} recent</span>
+    </div>
+    <div class="alert-filter" style="margin-top:0.75rem;">
+        <span class="alert-filter-label">View:</span>
+        <button type="button" class="alert-filter-btn active" data-filter="high">High</button>
+        <button type="button" class="alert-filter-btn" data-filter="average">Average</button>
+        <button type="button" class="alert-filter-btn" data-filter="low">Low</button>
+    </div>
+
+    <div class="alert-table" data-filter="high" style="margin-top:1rem;">
+        {% if high_pressure_events %}
+            <div class="table-container" style="margin-top:1rem;">
+                <table class="management-table" style="min-width:0;">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Time</th>
+                            <th>Peak Pressure</th>
+                            <th>Contact Area</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in high_pressure_events %}
+                        <tr>
+                            <td>{{ event.user.first_name|default:event.user.username }}</td>
+                            <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                            <td>
+                                {% if event.peak_pressure_index is not None %}
+                                    {{ event.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.contact_area_percentage is not None %}
+                                    {{ event.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No high-pressure alerts for assigned patients.</p>
+        {% endif %}
+    </div>
+
+    <div class="alert-table" data-filter="average" style="margin-top:1rem; display:none;">
+        {% if average_pressure_events %}
+            <div class="table-container" style="margin-top:1rem;">
+                <table class="management-table" style="min-width:0;">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Time</th>
+                            <th>Peak Pressure</th>
+                            <th>Contact Area</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in average_pressure_events %}
+                        <tr>
+                            <td>{{ event.user.first_name|default:event.user.username }}</td>
+                            <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                            <td>
+                                {% if event.peak_pressure_index is not None %}
+                                    {{ event.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.contact_area_percentage is not None %}
+                                    {{ event.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No average-pressure alerts for assigned patients.</p>
+        {% endif %}
+    </div>
+
+    <div class="alert-table" data-filter="low" style="margin-top:1rem; display:none;">
+        {% if low_pressure_events %}
+            <div class="table-container" style="margin-top:1rem;">
+                <table class="management-table" style="min-width:0;">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Time</th>
+                            <th>Peak Pressure</th>
+                            <th>Contact Area</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in low_pressure_events %}
+                        <tr>
+                            <td>{{ event.user.first_name|default:event.user.username }}</td>
+                            <td>{{ event.timestamp|date:"N j, H:i" }}</td>
+                            <td>
+                                {% if event.peak_pressure_index is not None %}
+                                    {{ event.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.contact_area_percentage is not None %}
+                                    {{ event.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No low-pressure alerts for assigned patients.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="d-flex justify-content-between align-items-center">
+        <h3>Patient Comments</h3>
+        <span style="font-size:0.85rem;color:#666;">{{ patient_comments|length }} recent</span>
+    </div>
+    {% if patient_comments %}
+        <div class="table-container" style="margin-top:1rem;">
+            <table class="management-table" style="min-width:0;">
+                <thead>
+                    <tr>
+                        <th>Patient</th>
+                        <th>Time</th>
+                        <th>Comment</th>
+                        <th>Reply</th>
+                        <th>Frame</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for comment in patient_comments %}
+                    <tr>
+                        <td>{{ comment.user.first_name|default:comment.user.username }}</td>
+                        <td>{{ comment.timestamp|date:"N j, H:i" }}</td>
+                        <td style="max-width:220px;">
+                            {{ comment.text|truncatewords:18 }}
+                        </td>
+                        <td style="min-width:220px;">
+                            <form method="post" action="{% url 'reply_comment' comment.id %}">
+                                {% csrf_token %}
+                                <textarea name="clinician_reply" rows="2" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;">{{ comment.clinician_reply|default:'' }}</textarea>
+                                <button type="submit" class="btn-secondary" style="margin-top:0.5rem;">Save Reply</button>
+                            </form>
+                        </td>
+                        <td>#{{ comment.pressure_frame.id }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No comments from assigned patients.</p>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+.messages {
+    margin-bottom: 1rem;
+}
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+.alert-filter {
+    display: inline-flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.alert-filter-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+}
+.alert-filter-btn {
+    border: 1px solid #1f3c88;
+    background: #e8edf7;
+    color: #1f3c88;
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    width: auto;
+    min-width: 72px;
+}
+.alert-filter-btn.active {
+    background: #1f3c88;
+    color: #fff;
+    border-color: #1f3c88;
+}
+.alert-filter-btn:hover {
+    background: #e2e8f0;
+}
+</style>
 <script src="{% static 'js/heatmap.js' %}"></script>
-<script src="{% static 'js/clinician_dashboard.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.clinician-patient-card').forEach(function (card) {
@@ -70,25 +301,42 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!heatmapCanvas) return;
 
         var matrix = null;
-        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) { console.error('Error parsing matrix', e); }
+        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) {}
         var cells = [];
-        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) { console.error('Error parsing cells', e); }
+        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) {}
 
         if (matrix && Array.isArray(matrix)) {
-            try {
-                drawHeatmapOnCanvas(heatmapCanvas, matrix);
-            } catch (e) {
-                console.error('Error drawing heatmap', e);
-            }
+            drawHeatmapOnCanvas(heatmapCanvas, matrix);
         }
         if (cells && cells.length > 0) {
-            try {
-                drawAnnotationOnCanvas(annotCanvas, cells);
-            } catch (e) {
-                console.error('Error drawing annotation', e);
-            }
+            drawAnnotationOnCanvas(annotCanvas, cells);
         }
     });
+
+    var filterButtons = document.querySelectorAll('.alert-filter-btn');
+    var alertTables = document.querySelectorAll('.alert-table');
+    var alertCount = document.getElementById('alertCount');
+
+    function setAlertFilter(filter) {
+        filterButtons.forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.filter === filter);
+        });
+        alertTables.forEach(function (table) {
+            table.style.display = table.dataset.filter === filter ? 'block' : 'none';
+        });
+        if (alertCount) {
+            var countValue = alertCount.getAttribute('data-' + filter + '-count') || '0';
+            alertCount.textContent = countValue + ' recent';
+        }
+    }
+
+    filterButtons.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setAlertFilter(btn.dataset.filter);
+        });
+    });
+
+    setAlertFilter('high');
 });
 </script>
 {% endblock %}

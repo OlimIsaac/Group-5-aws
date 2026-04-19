@@ -43,90 +43,16 @@ class ClinicianProfile(models.Model):
         return f"ClinicianProfile for {self.user.username}"
 
 
-class ClinicianPatientAssignment(models.Model):
-    clinician = models.ForeignKey(User, on_delete=models.CASCADE, related_name="clinician_assignments", limit_choices_to={'role': User.ROLE_CLINICIAN})
-    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="patient_assignments", limit_choices_to={'role': User.ROLE_PATIENT})
+class Assignment(models.Model):
+    clinician = models.ForeignKey(ClinicianProfile, on_delete=models.CASCADE, related_name="assignments")
+    patient = models.ForeignKey(PatientProfile, on_delete=models.CASCADE, related_name="assignments")
     assigned_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         unique_together = ("clinician", "patient")
 
     def __str__(self):
-        return f"{self.clinician.username} -> {self.patient.username}"
-
-
-class SensorData(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sensor_data", limit_choices_to={'role': User.ROLE_PATIENT})
-    timestamp = models.DateTimeField()
-    pressure_value = models.FloatField()
-    # optional additional sensor fields
-    sensor_id = models.CharField(max_length=100, blank=True)
-    location = models.CharField(max_length=100, blank=True)
-
-    class Meta:
-        ordering = ["timestamp"]
-        indexes = [
-            models.Index(fields=['user', 'timestamp']),
-            models.Index(fields=['timestamp']),
-        ]
-
-    def __str__(self):
-        return f"SensorData for {self.user.username} at {self.timestamp}"
-
-
-class Feedback(models.Model):
-    STATUS_PENDING = 'pending'
-    STATUS_REVIEWED = 'reviewed'
-    STATUS_RESOLVED = 'resolved'
-
-    STATUS_CHOICES = [
-        (STATUS_PENDING, 'Pending'),
-        (STATUS_REVIEWED, 'Reviewed'),
-        (STATUS_RESOLVED, 'Resolved'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
-    sensor_data = models.ForeignKey(SensorData, on_delete=models.CASCADE, related_name='feedbacks')
-    comment = models.TextField()
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default=STATUS_PENDING,
-    )
-    admin_notes = models.TextField(blank=True)
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-    reviewed_by = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='reviewed_feedbacks',
-    )
-    created_at = models.DateTimeField(default=timezone.now)
-
-    def __str__(self):
-        return f"Feedback by {self.user.username} on {self.sensor_data}"
-
-    @property
-    def timestamp(self):
-        return self.created_at
-
-    @property
-    def feedback_text(self):
-        return self.comment
-
-    def mark_reviewed(self, reviewer):
-        self.status = 'reviewed'
-        self.reviewed_at = timezone.now()
-        self.reviewed_by = reviewer
-        self.save()
-
-    def resolve(self, reviewer, notes=''):
-        self.status = 'resolved'
-        self.reviewed_at = timezone.now()
-        self.reviewed_by = reviewer
-        self.admin_notes = notes
-        self.save()
+        return f"{self.clinician.user.username} -> {self.patient.user.username}"
 
 
 class PressureFrame(models.Model):
@@ -153,6 +79,45 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user.username} on {self.pressure_frame}"
+
+
+class Feedback(models.Model):
+    STATUS_PENDING = 'pending'
+    STATUS_REVIEWED = 'reviewed'
+    STATUS_RESOLVED = 'resolved'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_REVIEWED, 'Reviewed'),
+        (STATUS_RESOLVED, 'Resolved'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
+    pressure_frame = models.ForeignKey(PressureFrame, on_delete=models.CASCADE, related_name='feedbacks')
+    timestamp = models.DateTimeField(default=timezone.now)
+    feedback_text = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    admin_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_feedbacks')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Feedback by {self.user.username} on {self.pressure_frame} ({self.get_status_display()})"
+
+    def mark_reviewed(self, admin_user):
+        self.status = self.STATUS_REVIEWED
+        self.reviewed_by = admin_user
+        self.reviewed_at = timezone.now()
+        self.save()
+
+    def resolve(self, admin_user, notes=''):
+        self.status = self.STATUS_RESOLVED
+        self.admin_notes = notes
+        self.reviewed_by = admin_user
+        self.reviewed_at = timezone.now()
+        self.save()
 
 
 class PainZoneReport(models.Model):
