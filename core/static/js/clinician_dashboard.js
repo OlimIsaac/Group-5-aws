@@ -10,7 +10,7 @@
     }
 
     function getDetailApiUrl(patientId) {
-        var workspace = document.querySelector('.clinician-workspace');
+        var workspace = document.querySelector('.clin-workspace');
         var template = workspace && workspace.dataset.detailApiTemplate
             ? workspace.dataset.detailApiTemplate
             : '/clinician/api/patient/0/';
@@ -143,10 +143,13 @@
 
     function safeDrawHeatmap(canvas, matrix) {
         if (typeof drawHeatmapOnCanvas === 'function') {
-            drawHeatmapOnCanvas(canvas, matrix);
-            return;
+            var ok = drawHeatmapOnCanvas(canvas, matrix);
+            if (ok) {
+                return true;
+            }
         }
         drawHeatmapFallback(canvas, matrix);
+        return normaliseLocalMatrix(matrix) !== null;
     }
 
     function safeDrawAnnotation(canvas, cells) {
@@ -194,7 +197,7 @@
             return;
         }
         el.textContent = message || '';
-        el.className = 'annotation-status' + (cssClass ? ' ' + cssClass : '');
+        el.className = 'clin-detail-status' + (cssClass ? ' ' + cssClass : '');
     }
 
     function updateHeader(patient, reportUrl) {
@@ -221,11 +224,33 @@
         var heatmapCanvas = document.getElementById('clinicianHeatmapCanvas');
         var annotationCanvas = document.getElementById('clinicianAnnotationCanvas');
         var annotationInfo = document.getElementById('clinicianAnnotationInfo');
+        var container = document.getElementById('clinicianHeatmapContainer');
+        var hasHeatmap = false;
 
         if (heatmapCanvas && latest && Array.isArray(latest.matrix)) {
-            safeDrawHeatmap(heatmapCanvas, latest.matrix);
+            // Show the canvas container, hide any empty state
+            if (container) container.style.display = '';
+            hasHeatmap = safeDrawHeatmap(heatmapCanvas, latest.matrix);
         } else {
             clearCanvas(heatmapCanvas);
+            // Show empty state when no data
+            if (container) {
+                container.style.display = 'none';
+                var emptyEl = container.parentNode.querySelector('.clin-heatmap-empty');
+                if (!emptyEl) {
+                    emptyEl = document.createElement('div');
+                    emptyEl.className = 'clin-heatmap-empty';
+                    emptyEl.textContent = 'No pressure data available for this patient.';
+                    container.parentNode.insertBefore(emptyEl, container.nextSibling);
+                }
+                emptyEl.style.display = '';
+            }
+        }
+
+        // Hide empty state if we have data
+        if (hasHeatmap && container) {
+            var existingEmpty = container.parentNode.querySelector('.clin-heatmap-empty');
+            if (existingEmpty) existingEmpty.style.display = 'none';
         }
 
         if (annotationCanvas) {
@@ -233,7 +258,11 @@
         }
 
         if (annotationInfo) {
-            if (annotation && annotation.cells && annotation.cells.length > 0) {
+            if (!hasHeatmap && latest && latest.matrix) {
+                annotationInfo.textContent = 'Heatmap could not be rendered. Try another patient or newer frame.';
+            } else if (!hasHeatmap) {
+                annotationInfo.textContent = 'No pressure data available.';
+            } else if (annotation && annotation.cells && annotation.cells.length > 0) {
                 annotationInfo.textContent = 'Pain marks: ' + annotation.cells.length + ' cells. Last update: ' + formatDateTime(annotation.timestamp);
             } else {
                 annotationInfo.textContent = 'No pain marks submitted.';
@@ -260,7 +289,17 @@
         if (ppiEl) ppiEl.textContent = latest.peak_pressure_index != null ? Number(latest.peak_pressure_index).toFixed(1) : '--';
         if (contactEl) contactEl.textContent = latest.contact_area_percentage != null ? Number(latest.contact_area_percentage).toFixed(1) + '%' : '--';
         if (scoreEl) scoreEl.textContent = latest.risk_score != null ? Number(latest.risk_score).toFixed(1) : '--';
-        if (levelEl) levelEl.textContent = latest.risk_level ? String(latest.risk_level).toUpperCase() : '--';
+
+        if (levelEl) {
+            var level = latest.risk_level ? String(latest.risk_level).toUpperCase() : '--';
+            levelEl.textContent = level;
+            // Apply risk-level color class
+            levelEl.className = 'clin-metric-value';
+            if (latest.risk_level) {
+                levelEl.classList.add(latest.risk_level.toLowerCase());
+            }
+        }
+
         if (tsEl) tsEl.textContent = 'Latest frame: ' + formatDateTime(latest.timestamp);
     }
 
@@ -271,7 +310,7 @@
         }
 
         if (!rows || rows.length === 0) {
-            body.innerHTML = '<tr><td colspan="6" class="text-secondary">No pressure frames available.</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" style="color:var(--mist);text-align:center;padding:2rem">No pressure frames available.</td></tr>';
             return;
         }
 
@@ -296,25 +335,25 @@
         }
 
         if (!comments || comments.length === 0) {
-            list.textContent = 'No comments from this patient yet.';
+            list.innerHTML = '<div style="color:var(--mist);text-align:center;padding:2rem;font-size:0.85rem">No comments from this patient yet.</div>';
             return;
         }
 
         list.innerHTML = '';
         comments.slice(0, 20).forEach(function (comment) {
             var item = document.createElement('div');
-            item.className = 'comment-item';
+            item.className = 'clin-comment-item';
             item.setAttribute('data-comment-id', comment.id);
             var existingReply = comment.clinician_reply
-                ? '<div class="comment-reply"><strong>Clinician reply:</strong> ' + escapeHtml(comment.clinician_reply) + '</div>'
+                ? '<div class="clin-comment-reply-existing"><strong>Clinician reply:</strong> ' + escapeHtml(comment.clinician_reply) + '</div>'
                 : '';
             item.innerHTML =
-                '<div class="comment-meta">Patient note at ' + formatDateTime(comment.frame_timestamp) + '</div>' +
-                '<div class="comment-text">' + escapeHtml(comment.text) + '</div>' +
+                '<div class="clin-comment-meta">Patient note at ' + formatDateTime(comment.frame_timestamp) + '</div>' +
+                '<div class="clin-comment-text">' + escapeHtml(comment.text) + '</div>' +
                 existingReply +
-                '<div class="clinician-reply-form">' +
-                    '<textarea class="form-input clinician-reply-input" rows="2" placeholder="Write advice or follow-up"></textarea>' +
-                    '<button type="button" class="btn btn-outline btn-sm clinician-reply-btn" data-comment-id="' + comment.id + '">Save Reply</button>' +
+                '<div class="clin-reply-form">' +
+                    '<input type="text" class="clin-reply-input clinician-reply-input" placeholder="Write advice or follow-up…">' +
+                    '<button type="button" class="btn btn-primary btn-sm clinician-reply-btn" data-comment-id="' + comment.id + '">Reply</button>' +
                 '</div>';
             list.appendChild(item);
         });
@@ -389,7 +428,7 @@
         var riskFilter = filterEl ? filterEl.value : 'all';
         var sortMode = sortEl ? sortEl.value : 'risk';
 
-        var items = Array.prototype.slice.call(list.querySelectorAll('.clinician-patient-item'));
+        var items = Array.prototype.slice.call(list.querySelectorAll('.clin-patient-item'));
         var sorted = sortPatientItems(items, sortMode);
 
         sorted.forEach(function (item) {
@@ -430,7 +469,7 @@
             countEl.textContent = 'Showing ' + shownCount + ' of ' + items.length + ' patients';
         }
 
-        var activeItem = list.querySelector('.clinician-patient-item.active');
+        var activeItem = list.querySelector('.clin-patient-item.active');
         if (activeItem && activeItem.style.display === 'none') {
             var firstVisible = sorted.find(function (item) { return item.style.display !== 'none'; });
             if (firstVisible) {
@@ -486,11 +525,11 @@
                     return;
                 }
 
-                var replyEl = cardEl.querySelector('.comment-reply');
+                var replyEl = cardEl.querySelector('.clin-comment-reply-existing');
                 if (!replyEl) {
                     replyEl = document.createElement('div');
-                    replyEl.className = 'comment-reply';
-                    cardEl.insertBefore(replyEl, cardEl.querySelector('.clinician-reply-form'));
+                    replyEl.className = 'clin-comment-reply-existing';
+                    cardEl.insertBefore(replyEl, cardEl.querySelector('.clin-reply-form'));
                 }
                 replyEl.innerHTML = '<strong>Clinician reply:</strong> ' + escapeHtml(data.clinician_reply || replyText);
                 setStatus('Reply saved.', 'saved');
@@ -517,7 +556,7 @@
             }
 
             var commentId = Number(target.dataset.commentId || 0);
-            var card = target.closest('.comment-item');
+            var card = target.closest('.clin-comment-item');
             if (!card) {
                 return;
             }
@@ -548,6 +587,11 @@
         var ppi = (trend && Array.isArray(trend.ppi)) ? trend.ppi : [];
         var risk = (trend && Array.isArray(trend.risk)) ? trend.risk : [];
 
+        // Get theme-aware colors
+        var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        var gridColor = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+        var tickColor = isDark ? '#5a7a9a' : '#6b7280';
+
         trendChart = new Chart(canvas.getContext('2d'), {
             type: 'line',
             data: {
@@ -556,19 +600,21 @@
                     {
                         label: 'PPI',
                         data: ppi,
-                        borderColor: 'rgba(37, 99, 235, 1)',
-                        backgroundColor: 'rgba(37, 99, 235, 0.2)',
+                        borderColor: '#00d4c8',
+                        backgroundColor: 'rgba(0,212,200,0.1)',
                         pointRadius: 1,
-                        tension: 0.25,
+                        tension: 0.3,
+                        borderWidth: 2,
                         yAxisID: 'y',
                     },
                     {
                         label: 'Risk',
                         data: risk,
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.1)',
                         pointRadius: 1,
-                        tension: 0.25,
+                        tension: 0.3,
+                        borderWidth: 2,
                         yAxisID: 'y1',
                     }
                 ]
@@ -576,18 +622,33 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: tickColor,
+                            font: { size: 11 },
+                        }
+                    }
+                },
                 scales: {
+                    x: {
+                        ticks: { color: tickColor, font: { size: 10 }, maxTicksLimit: 10 },
+                        grid: { color: gridColor },
+                    },
                     y: {
                         beginAtZero: true,
                         suggestedMax: 4095,
-                        title: { display: true, text: 'PPI' },
+                        title: { display: true, text: 'PPI', color: tickColor, font: { size: 11 } },
+                        ticks: { color: tickColor, font: { size: 10 } },
+                        grid: { color: gridColor },
                     },
                     y1: {
                         beginAtZero: true,
                         suggestedMax: 100,
                         position: 'right',
                         grid: { drawOnChartArea: false },
-                        title: { display: true, text: 'Risk' },
+                        title: { display: true, text: 'Risk', color: tickColor, font: { size: 11 } },
+                        ticks: { color: tickColor, font: { size: 10 } },
                     }
                 }
             }
@@ -595,7 +656,7 @@
     }
 
     function setActivePatient(patientId) {
-        document.querySelectorAll('.clinician-patient-item').forEach(function (item) {
+        document.querySelectorAll('.clin-patient-item').forEach(function (item) {
             item.classList.toggle('active', Number(item.dataset.patientId) === Number(patientId));
         });
     }
@@ -610,13 +671,13 @@
             byId[String(patient.id)] = patient;
         });
 
-        document.querySelectorAll('.clinician-patient-item').forEach(function (item) {
+        document.querySelectorAll('.clin-patient-item').forEach(function (item) {
             var patient = byId[item.dataset.patientId];
             if (!patient) {
                 return;
             }
 
-            var metaEl = item.querySelector('.clinician-patient-item-meta');
+            var metaEl = item.querySelector('.clin-p-meta');
             if (!metaEl) {
                 return;
             }
@@ -627,7 +688,7 @@
 
             metaEl.innerHTML =
                 '<span class="risk-pill risk-' + riskLevel + '">' + riskText + '</span>' +
-                '<span>PPI ' + ppiText + '</span>';
+                '<span style="color:var(--fog);font-size:0.7rem">PPI ' + ppiText + '</span>';
         });
     }
 
@@ -645,7 +706,12 @@
             })
             .then(function (data) {
                 updateHeader(data.patient, data.report_url);
-                renderHeatmap(data.latest, data.annotation);
+
+                // Use requestAnimationFrame to ensure canvas is painted before drawing
+                requestAnimationFrame(function () {
+                    renderHeatmap(data.latest, data.annotation);
+                });
+
                 renderMetrics(data.latest);
                 renderFrames(data.recent_frames || []);
                 renderComments(data.recent_comments || []);
@@ -674,7 +740,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        var patientItems = Array.prototype.slice.call(document.querySelectorAll('.clinician-patient-item'));
+        var patientItems = Array.prototype.slice.call(document.querySelectorAll('.clin-patient-item'));
         if (patientItems.length === 0) {
             return;
         }
@@ -682,7 +748,13 @@
         var initialDetail = readInitialDetailData();
         if (initialDetail && initialDetail.patient) {
             updateHeader(initialDetail.patient, initialDetail.report_url);
-            renderHeatmap(initialDetail.latest, initialDetail.annotation);
+
+            // Use requestAnimationFrame to ensure the canvas element is in
+            // the DOM and has computed dimensions before we paint onto it
+            requestAnimationFrame(function () {
+                renderHeatmap(initialDetail.latest, initialDetail.annotation);
+            });
+
             renderMetrics(initialDetail.latest);
             renderFrames(initialDetail.recent_frames || []);
             renderComments(initialDetail.recent_comments || []);
@@ -709,7 +781,7 @@
             });
         });
 
-        var activeItem = document.querySelector('.clinician-patient-item.active');
+        var activeItem = document.querySelector('.clin-patient-item.active');
         var activePatientId = Number((activeItem && activeItem.dataset.patientId) || patientItems[0].dataset.patientId || 0);
         if (activePatientId) {
             currentPatientId = activePatientId;

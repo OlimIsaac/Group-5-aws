@@ -662,6 +662,8 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
                 latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
                 latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
 
+                is_selected = selected_assignment and selected_assignment.patient_id == patient_user.id
+
                 if latest_metrics and latest_metrics['high_pressure_flag']:
                     high_pressure_total += 1
 
@@ -671,7 +673,7 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
                     'patient_username': patient_user.username,
                     'patient_email': patient_user.email,
                     'report_url': f'/clinician/patient/{patient_user.id}/report/',
-                    'item_class': 'clinician-patient-item active' if selected_patient_id == patient_user.id else 'clinician-patient-item',
+                    'item_class': 'clinician-patient-item active' if is_selected else 'clinician-patient-item',
                     'latest_ppi': latest_metrics['peak_pressure_index'] if latest_metrics else None,
                     'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
                     'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,

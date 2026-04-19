@@ -1,4 +1,5 @@
 from django.urls import include, path
+from django.views.generic import RedirectView
 from rest_framework.routers import DefaultRouter
 
 from . import views
@@ -62,4 +63,8 @@ urlpatterns = [
     path('manage/feedback/', views.FeedbackListView.as_view(), name='feedback_list'),
     path('manage/feedback/<int:feedback_id>/', views.FeedbackDetailView.as_view(), name='feedback_detail'),
     path('manage/feedback/<int:feedback_id>/delete/', views.DeleteFeedbackView.as_view(), name='delete_feedback'),
+
+    # Aliases required by templates/base.html navigation
+    path('dashboard/', RedirectView.as_view(pattern_name='home', permanent=False), name='dashboard'),
+    path('upload/', views.AdminPatientCSVUploadView.as_view(), name='upload_csv'),
 ]

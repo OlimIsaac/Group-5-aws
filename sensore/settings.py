@@ -65,7 +65,7 @@ ROOT_URLCONF = "sensore.urls"
 TEMPLATES = [
 	{
 		"BACKEND": "django.template.backends.django.DjangoTemplates",
-		"DIRS": [BASE_DIR / "core" / "templates"],
+		"DIRS": [BASE_DIR / "templates", BASE_DIR / "core" / "templates"],
 		"APP_DIRS": True,
 		"OPTIONS": {
 			"context_processors": [

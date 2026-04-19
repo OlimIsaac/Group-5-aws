@@ -372,14 +372,14 @@
 
   {% if user.is_authenticated %}
   <div class="topbar-nav">
-    {% if user.profile.role == 'patient' %}
+    {% if user.role == 'patient' %}
       <a href="{% url 'patient_dashboard' %}" class="{% block nav_patient %}{% endblock %}">Dashboard</a>
       <a href="{% url 'patient_report' %}" class="{% block nav_report %}{% endblock %}">My Report</a>
-    {% elif user.profile.role == 'clinician' or user.profile.role == 'admin' %}
+    {% elif user.role == 'clinician' or user.role == 'admin' %}
       <a href="{% url 'clinician_dashboard' %}" class="{% block nav_clin %}{% endblock %}">Dashboard</a>
       <a href="{% url 'upload_csv' %}" class="{% block nav_upload_clin %}{% endblock %}">Upload Data</a>
     {% endif %}
-    {% if user.profile.role == 'patient' %}
+    {% if user.role == 'patient' %}
       <a href="{% url 'upload_csv' %}" class="{% block nav_upload %}{% endblock %}">Upload Data</a>
     {% endif %}
   </div>
@@ -395,7 +395,7 @@
   {% if user.is_authenticated %}
   <div class="topbar-user">
     <span>{{ user.get_full_name|default:user.username }}</span>
-    {% with role=user.profile.role %}
+    {% with role=user.role %}
       {% if role %}
         <span class="topbar-badge {% if role == 'clinician' %}clinician{% elif role == 'admin' %}admin{% endif %}">
           {{ role }}

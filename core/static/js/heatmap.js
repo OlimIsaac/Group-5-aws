@@ -12,6 +12,50 @@ function pressureNumber(value) {
     return numeric;
 }
 
+function pressureToRgb(value) {
+    var v = pressureNumber(value);
+    if (v <= 100) {
+        return [10, 20, 34];
+    }
+
+    var t = (v - 100) / (4095 - 100);
+    if (t < 0.25) {
+        // navy -> blue
+        var a0 = t / 0.25;
+        return [
+            Math.floor(10 + (0 - 10) * a0),
+            Math.floor(20 + (90 - 20) * a0),
+            Math.floor(34 + (220 - 34) * a0),
+        ];
+    }
+    if (t < 0.5) {
+        // blue -> cyan
+        var a1 = (t - 0.25) / 0.25;
+        return [
+            Math.floor(0 + (0 - 0) * a1),
+            Math.floor(90 + (205 - 90) * a1),
+            Math.floor(220 + (255 - 220) * a1),
+        ];
+    }
+    if (t < 0.75) {
+        // cyan -> yellow
+        var a2 = (t - 0.5) / 0.25;
+        return [
+            Math.floor(0 + (255 - 0) * a2),
+            Math.floor(205 + (215 - 205) * a2),
+            Math.floor(255 + (0 - 255) * a2),
+        ];
+    }
+
+    // yellow -> red
+    var a3 = (t - 0.75) / 0.25;
+    return [
+        Math.floor(255 + (255 - 255) * a3),
+        Math.floor(215 + (36 - 215) * a3),
+        Math.floor(0 + (0 - 0) * a3),
+    ];
+}
+
 function normaliseHeatmapMatrix(matrix) {
     if (!Array.isArray(matrix)) {
         return null;
@@ -58,13 +102,13 @@ function cellBounds(index, size) {
 
 // Draw a 32x32 pressure matrix onto a canvas element
 function drawHeatmapOnCanvas(canvas, matrix) {
-    if (!canvas) return;
+    if (!canvas) return false;
 
     var normalised = normaliseHeatmapMatrix(matrix);
-    if (!normalised) return;
+    if (!normalised) return false;
 
     var ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return false;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingEnabled = false;
@@ -73,11 +117,13 @@ function drawHeatmapOnCanvas(canvas, matrix) {
         var y = cellBounds(r, canvas.height);
         for (var c = 0; c < 32; c++) {
             var x = cellBounds(c, canvas.width);
-            var norm = normalised[r][c] / 4095;
-            ctx.fillStyle = 'rgba(' + Math.floor(255 * norm) + ',0,' + Math.floor(255 * (1 - norm)) + ',1)';
+            var rgb = pressureToRgb(normalised[r][c]);
+            ctx.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
             ctx.fillRect(x[0], y[0], x[1] - x[0], y[1] - y[0]);
         }
     }
+
+    return true;
 }
 
 // Draw pain annotation cells onto a canvas element (semi-transparent red)

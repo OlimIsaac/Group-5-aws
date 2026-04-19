@@ -1128,13 +1128,15 @@ select {
 .clinician-workspace {
     display: grid;
     grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-    gap: 16px;
+    gap: 18px;
     align-items: start;
 }
 
 .clinician-sidebar {
     border-right: 1px solid var(--surface-border);
     padding-right: 12px;
+    position: sticky;
+    top: 12px;
 }
 
 .clinician-sidebar h3 {
@@ -1179,7 +1181,7 @@ select {
     text-align: left;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
     color: var(--app-text) !important;
     font-size: 13px !important;
     font-weight: 600;
@@ -1260,7 +1262,7 @@ select {
 .clinician-detail {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .clinician-detail-header {
@@ -1278,13 +1280,20 @@ select {
 .clinician-detail-grid {
     display: grid;
     grid-template-columns: minmax(300px, 1fr) minmax(340px, 1fr);
-    gap: 12px;
+    gap: 14px;
     align-items: start;
 }
 
 .clinician-heatmap-lg {
     max-width: 480px;
     margin: 0;
+    border: 1px solid var(--surface-border);
+    box-shadow: inset 0 0 0 1px rgba(26, 42, 74, 0.06);
+    background: linear-gradient(180deg, rgba(23, 43, 77, 0.03), rgba(23, 43, 77, 0.01));
+}
+
+.clinician-heatmap-lg canvas {
+    min-height: 320px;
 }
 
 .clinician-metrics-grid {
@@ -1300,7 +1309,7 @@ select {
 .clinician-bottom-grid {
     display: grid;
     grid-template-columns: minmax(360px, 1.4fr) minmax(280px, 1fr);
-    gap: 12px;
+    gap: 14px;
     align-items: start;
 }
 
@@ -1328,6 +1337,7 @@ select {
     font-size: 13px;
     color: var(--muted-text);
     margin-top: 8px;
+    line-height: 1.5;
 }
 
 .annotation-note-text {

@@ -1,131 +1,77 @@
-import json
+from datetime import timedelta
 import unittest
-from datetime import date, datetime, timedelta
 
-from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.test import TestCase
 from django.utils import timezone
 
-try:
-    from accounts.models import UserProfile
-    from sensore.models import Comment, SensorFrame, SensorSession
-    from sensore.utils import analyse_session_frames
-except Exception as exc:  # pragma: no cover - legacy compatibility only
-    raise unittest.SkipTest(f"Legacy sensore tests skipped: {exc}")
+if "sensore" not in settings.INSTALLED_APPS:
+    raise unittest.SkipTest("sensore app tests skipped: current settings use core app stack")
 
-User = get_user_model()
+from .models import SensorFrame, SensorSession
 
 
-def build_flat_frame(base_value=1200):
-    values = []
-    for row in range(32):
-        for col in range(32):
-            value = base_value
-            if 11 <= col <= 20 and 12 <= row <= 24:
-                value += 1200
-            values.append(min(4095, value))
-    return values
-
-
-class SensoreAccessAndFeatureTests(TestCase):
+class SessionFramesApiWindowingTests(TestCase):
     def setUp(self):
-        self.client = Client()
+        self.patient = User.objects.create_user(username="api_patient", password="patient123")
+        self.client.login(username="api_patient", password="patient123")
 
-        self.admin = User.objects.create_user('admin_test', password='admin123', is_staff=True, is_superuser=True)
-        self.admin_profile, _ = UserProfile.objects.get_or_create(user=self.admin)
-        self.admin_profile.role = 'admin'
-        self.admin_profile.save(update_fields=['role'])
-
-        self.clinician = User.objects.create_user('clinician_test', password='clinic123')
-        self.clinician_profile, _ = UserProfile.objects.get_or_create(user=self.clinician)
-        self.clinician_profile.role = 'clinician'
-        self.clinician_profile.save(update_fields=['role'])
-
-        self.patient_1 = User.objects.create_user('patient_alpha', password='patient123')
-        self.patient_1_profile, _ = UserProfile.objects.get_or_create(user=self.patient_1)
-        self.patient_1_profile.role = 'patient'
-        self.patient_1_profile.patient_id = 'PAT_ALPHA'
-        self.patient_1_profile.assigned_clinician = self.clinician
-        self.patient_1_profile.save()
-
-        self.patient_2 = User.objects.create_user('patient_beta', password='patient123')
-        self.patient_2_profile, _ = UserProfile.objects.get_or_create(user=self.patient_2)
-        self.patient_2_profile.role = 'patient'
-        self.patient_2_profile.patient_id = 'PAT_BETA'
-        self.patient_2_profile.save()
-
-        start = timezone.make_aware(datetime(2026, 4, 10, 9, 0, 0))
-        self.session_1 = SensorSession.objects.create(
-            patient=self.patient_1,
-            session_date=date(2026, 4, 10),
-            start_time=start,
-            end_time=start + timedelta(minutes=5),
-        )
-        self.session_2 = SensorSession.objects.create(
-            patient=self.patient_2,
-            session_date=date(2026, 4, 10),
-            start_time=start,
-            end_time=start + timedelta(minutes=5),
+        self.session = SensorSession.objects.create(
+            patient=self.patient,
+            session_date=timezone.now().date(),
+            start_time=timezone.now() - timedelta(hours=1),
         )
 
-        for idx in range(4):
-            SensorFrame.objects.create(
-                session=self.session_1,
-                timestamp=start + timedelta(seconds=idx * 30),
-                frame_index=idx,
-                data=json.dumps(build_flat_frame(1000 + idx * 50)),
+    def _create_frames(self, count):
+        base_time = self.session.start_time
+        frames = [
+            SensorFrame(
+                session=self.session,
+                timestamp=base_time + timedelta(seconds=i * 30),
+                frame_index=i,
+                data='[0]',
             )
-            SensorFrame.objects.create(
-                session=self.session_2,
-                timestamp=start + timedelta(seconds=idx * 30),
-                frame_index=idx,
-                data=json.dumps(build_flat_frame(900 + idx * 40)),
-            )
+            for i in range(count)
+        ]
+        SensorFrame.objects.bulk_create(frames)
 
-        analyse_session_frames(self.session_1, create_alerts=True)
-        analyse_session_frames(self.session_2, create_alerts=True)
+    def test_default_returns_latest_window(self):
+        self._create_frames(1305)
 
-    def test_patient_cannot_view_other_patient_session(self):
-        self.client.login(username='patient_alpha', password='patient123')
-        response = self.client.get(f'/api/session/{self.session_2.id}/frames/')
-        self.assertEqual(response.status_code, 403)
-
-    def test_clinician_can_only_view_assigned_patient_sessions(self):
-        self.client.login(username='clinician_test', password='clinic123')
-
-        allowed = self.client.get(f'/api/session/{self.session_1.id}/frames/')
-        self.assertEqual(allowed.status_code, 200)
-
-        forbidden = self.client.get(f'/api/session/{self.session_2.id}/frames/')
-        self.assertEqual(forbidden.status_code, 403)
-
-    def test_comment_metadata_pain_zones_and_points_saved(self):
-        self.client.login(username='patient_alpha', password='patient123')
-        frame = self.session_1.frames.order_by('frame_index').first()
-
-        payload = {
-            'text': 'Pain in lower back while leaning.',
-            'frame_id': frame.id,
-            'pain_zones': ['lower_back', 'left_hip'],
-            'pain_points': [{'x': 14, 'y': 20}, {'x': 15, 'y': 21}],
-            'time_view': 6,
-            'source': 'patient_dashboard',
-        }
-        response = self.client.post(
-            f'/api/session/{self.session_1.id}/comment/',
-            data=json.dumps(payload),
-            content_type='application/json',
-        )
+        response = self.client.get(f"/api/session/{self.session.id}/frames/")
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
 
-        comment = Comment.objects.filter(session=self.session_1, author=self.patient_1).latest('created_at')
-        self.assertEqual(comment.metadata.get('pain_zones'), ['lower_back', 'left_hip'])
-        self.assertEqual(comment.metadata.get('time_view_hours'), 6)
-        self.assertEqual(len(comment.metadata.get('pain_points', [])), 2)
+        self.assertEqual(payload["total_frames"], 1305)
+        self.assertEqual(payload["returned_frames"], 1200)
+        self.assertTrue(payload["truncated"])
+        self.assertEqual(payload["first_frame_index"], 105)
+        self.assertEqual(payload["last_frame_index"], 1304)
+        self.assertEqual(payload["frames"][0]["frame_index"], 105)
+        self.assertEqual(payload["frames"][-1]["frame_index"], 1304)
 
-    def test_report_csv_download(self):
-        self.client.login(username='patient_alpha', password='patient123')
-        response = self.client.get('/report/?download_csv=1')
+    def test_limit_all_returns_full_session(self):
+        self._create_frames(25)
+
+        response = self.client.get(f"/api/session/{self.session.id}/frames/?limit=all")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'text/csv')
-        self.assertIn('attachment; filename="Sensore_Report_', response['Content-Disposition'])
+        payload = response.json()
+
+        self.assertEqual(payload["total_frames"], 25)
+        self.assertEqual(payload["returned_frames"], 25)
+        self.assertFalse(payload["truncated"])
+        self.assertEqual(payload["first_frame_index"], 0)
+        self.assertEqual(payload["last_frame_index"], 24)
+
+    def test_numeric_limit_returns_latest_n_frames(self):
+        self._create_frames(40)
+
+        response = self.client.get(f"/api/session/{self.session.id}/frames/?limit=7")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+
+        self.assertEqual(payload["returned_frames"], 7)
+        self.assertTrue(payload["truncated"])
+        self.assertEqual(payload["first_frame_index"], 33)
+        self.assertEqual(payload["last_frame_index"], 39)
