@@ -8,8 +8,12 @@ Replicate core app data from this repository into another repository.
 Usage:
   ./replicate_core_data_to_repo.sh --target-repo /path/to/target/repo [options]
 
+  ./replicate_core_data_to_repo.sh /path/to/target/repo [options]
+
+  ./replicate_core_data_to_repo.sh
+
 Options:
-  --target-repo PATH      Required. Destination repository path.
+  --target-repo PATH      Destination repository path.
   --source-repo PATH      Source repository path (default: script directory).
   --python BIN            Python executable (default: python).
   --source-manage PATH    Source manage.py relative to source repo (default: manage.py).
@@ -18,6 +22,7 @@ Options:
                           Default: /tmp/sensore_core_data_<timestamp>.json
   --keep-target-data      Keep existing target data (skip delete). Import may fail on conflicts.
   --skip-migrate          Skip target migrate step.
+  --forget-target         Remove saved default target path and exit.
   --yes                   Skip confirmation prompt when deleting target data.
   --help                  Show this help.
 
@@ -25,6 +30,8 @@ Notes:
 - This script expects compatible Django models in both repos.
 - By default, it deletes target core.User rows before import (cascades dependent core data).
 - Run this from an activated virtual environment that can run both repositories.
+- If target path is omitted in an interactive shell, the script prompts for it.
+- Target path is saved to .replicate_target_repo for future single-command runs.
 EOF
 }
 
@@ -37,28 +44,55 @@ FIXTURE_PATH="/tmp/sensore_core_data_$(date +%Y%m%d_%H%M%S).json"
 KEEP_TARGET_DATA=0
 SKIP_MIGRATE=0
 ASSUME_YES=0
+FORGET_TARGET=0
+TARGET_FROM_CACHE=0
+TARGET_CACHE_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --target-repo=*)
+      TARGET_REPO="${1#*=}"
+      shift
+      ;;
     --target-repo)
       TARGET_REPO="${2:-}"
       shift 2
+      ;;
+    --source-repo=*)
+      SOURCE_REPO="${1#*=}"
+      shift
       ;;
     --source-repo)
       SOURCE_REPO="${2:-}"
       shift 2
       ;;
+    --python=*)
+      PYTHON_BIN="${1#*=}"
+      shift
+      ;;
     --python)
       PYTHON_BIN="${2:-}"
       shift 2
+      ;;
+    --source-manage=*)
+      SOURCE_MANAGE_REL="${1#*=}"
+      shift
       ;;
     --source-manage)
       SOURCE_MANAGE_REL="${2:-}"
       shift 2
       ;;
+    --target-manage=*)
+      TARGET_MANAGE_REL="${1#*=}"
+      shift
+      ;;
     --target-manage)
       TARGET_MANAGE_REL="${2:-}"
       shift 2
+      ;;
+    --fixture=*)
+      FIXTURE_PATH="${1#*=}"
+      shift
       ;;
     --fixture)
       FIXTURE_PATH="${2:-}"
@@ -72,6 +106,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_MIGRATE=1
       shift
       ;;
+    --forget-target)
+      FORGET_TARGET=1
+      shift
+      ;;
     --yes)
       ASSUME_YES=1
       shift
@@ -80,24 +118,89 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    *)
+    --)
+      shift
+      break
+      ;;
+    -*)
       echo "Unknown argument: $1"
       echo
       usage
       exit 1
       ;;
+    *)
+      if [[ -z "$TARGET_REPO" ]]; then
+        TARGET_REPO="$1"
+      else
+        echo "Unexpected positional argument: $1"
+        echo
+        usage
+        exit 1
+      fi
+      shift
+      ;;
   esac
 done
 
+TARGET_CACHE_FILE="$SOURCE_REPO/.replicate_target_repo"
+
+if [[ $FORGET_TARGET -eq 1 ]]; then
+  if [[ -f "$TARGET_CACHE_FILE" ]]; then
+    rm -f "$TARGET_CACHE_FILE"
+    echo "Removed saved target path: $TARGET_CACHE_FILE"
+  else
+    echo "No saved target path found."
+  fi
+  exit 0
+fi
+
+if [[ -z "$TARGET_REPO" && -f "$TARGET_CACHE_FILE" ]]; then
+  TARGET_REPO="$(head -n 1 "$TARGET_CACHE_FILE" | tr -d '\r' | sed 's/[[:space:]]*$//')"
+  if [[ -n "$TARGET_REPO" ]]; then
+    TARGET_FROM_CACHE=1
+    echo "Using saved target repo: $TARGET_REPO"
+  fi
+fi
+
 if [[ -z "$TARGET_REPO" ]]; then
-  echo "Error: --target-repo is required."
+  if [[ -t 0 ]]; then
+    echo "No target repository path provided."
+    read -r -p "Enter target repo path: " TARGET_REPO
+  fi
+fi
+
+if [[ -z "$TARGET_REPO" ]]; then
+  echo "Error: target repository path is required."
+  echo "Example: ./replicate_core_data_to_repo.sh --target-repo /path/to/target/repo"
+  echo "Tip: once you provide a target, it is saved and future runs need no arguments."
   echo
   usage
   exit 1
 fi
 
+if [[ ! -d "$SOURCE_REPO" ]]; then
+  echo "Error: source repo path does not exist: $SOURCE_REPO"
+  exit 1
+fi
+
+if [[ ! -d "$TARGET_REPO" ]]; then
+  echo "Error: target repo path does not exist: $TARGET_REPO"
+  if [[ $TARGET_FROM_CACHE -eq 1 ]]; then
+    echo "The saved target path is stale. Reset it with: ./replicate_core_data_to_repo.sh --forget-target"
+  fi
+  exit 1
+fi
+
 SOURCE_REPO="$(cd "$SOURCE_REPO" && pwd)"
 TARGET_REPO="$(cd "$TARGET_REPO" && pwd)"
+
+if [[ "$TARGET_REPO" == "$SOURCE_REPO" ]]; then
+  echo "Error: target repo cannot be the same as source repo."
+  exit 1
+fi
+
+printf '%s\n' "$TARGET_REPO" > "$TARGET_CACHE_FILE"
+echo "Saved default target repo to $TARGET_CACHE_FILE"
 
 SOURCE_MANAGE_PATH="$SOURCE_REPO/$SOURCE_MANAGE_REL"
 TARGET_MANAGE_PATH="$TARGET_REPO/$TARGET_MANAGE_REL"
