@@ -42,7 +42,6 @@ legacy_core.sqlite3-journal
 /staticfiles
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
