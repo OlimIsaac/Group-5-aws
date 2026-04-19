@@ -4,6 +4,31 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _resolve_legacy_db_path():
+	configured = os.environ.get("SENSORE_LEGACY_DB", "").strip()
+	default_path = BASE_DIR / "legacy_core.sqlite3"
+
+	if not configured:
+		return default_path
+
+	candidate = Path(configured).expanduser()
+	if not candidate.is_absolute():
+		candidate = BASE_DIR / candidate
+
+	if candidate.exists() and candidate.is_dir():
+		candidate = candidate / "legacy_core.sqlite3"
+
+	try:
+		candidate.parent.mkdir(parents=True, exist_ok=True)
+	except OSError:
+		return default_path
+
+	if not os.access(candidate.parent, os.W_OK):
+		return default_path
+
+	return candidate
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "replace-this-in-prod")
 
@@ -59,7 +84,7 @@ WSGI_APPLICATION = "sensore.wsgi.application"
 DATABASES = {
 	"default": {
 		"ENGINE": "django.db.backends.sqlite3",
-		"NAME": os.environ.get("SENSORE_LEGACY_DB", str(BASE_DIR / "legacy_core.sqlite3")),
+		"NAME": str(_resolve_legacy_db_path()),
 	}
 }
 
