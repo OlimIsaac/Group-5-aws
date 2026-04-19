@@ -15,6 +15,7 @@
 {% endif %}
 
 {% if patients_data %}
+{{ initial_detail|json_script:"clinicianInitialDetailData" }}
 <div class="admin-grid report-summary-grid clinician-summary-grid">
     <div class="metric-card">
         <h4>Assigned Patients</h4>
@@ -30,17 +31,17 @@
     </div>
 </div>
 
-<div class="card clinician-workspace">
+<div class="card clinician-workspace" data-detail-api-template="{% url 'clinician_patient_detail_api' 0 %}">
     <aside class="clinician-sidebar">
         <h3>Assigned Patients</h3>
         <div id="clinicianPatientList" class="clinician-patient-list">
             {% for pd in patients_data %}
-            {% if forloop.first %}
-            <button type="button"
-                    class="clinician-patient-item active"
+            <a href="?patient={{ pd.patient_id }}"
+                    class="{{ pd.item_class }}"
                     data-patient-id="{{ pd.patient_id }}"
                     data-patient-name="{{ pd.patient_name }}"
-                    data-patient-email="{{ pd.patient_email }}">
+                    data-patient-email="{{ pd.patient_email }}"
+                    data-report-url="{{ pd.report_url }}">
                 <span class="clinician-patient-item-name">{{ pd.patient_name }}</span>
                 <span class="clinician-patient-item-email">{{ pd.patient_email }}</span>
                 <span class="clinician-patient-item-meta">
@@ -55,29 +56,7 @@
                         <span class="risk-pill risk-none">NO DATA</span>
                     {% endif %}
                 </span>
-            </button>
-            {% else %}
-            <button type="button"
-                    class="clinician-patient-item"
-                    data-patient-id="{{ pd.patient_id }}"
-                    data-patient-name="{{ pd.patient_name }}"
-                    data-patient-email="{{ pd.patient_email }}">
-                <span class="clinician-patient-item-name">{{ pd.patient_name }}</span>
-                <span class="clinician-patient-item-email">{{ pd.patient_email }}</span>
-                <span class="clinician-patient-item-meta">
-                    {% if pd.has_data %}
-                        <span class="risk-pill risk-{{ pd.latest_risk_level|default:'low' }}">
-                            {{ pd.latest_risk_level|default:'low'|upper }}
-                        </span>
-                        <span>
-                            PPI {{ pd.latest_ppi|default:'--' }}
-                        </span>
-                    {% else %}
-                        <span class="risk-pill risk-none">NO DATA</span>
-                    {% endif %}
-                </span>
-            </button>
-            {% endif %}
+            </a>
             {% endfor %}
         </div>
     </aside>
@@ -85,16 +64,16 @@
     <section class="clinician-detail">
         <div class="clinician-detail-header">
             <div>
-                <h3 id="clinicianDetailName">Patient Details</h3>
-                <p id="clinicianDetailEmail" class="text-secondary"></p>
+                <h3 id="clinicianDetailName">{{ initial_detail.patient.name|default:'Patient Details' }}</h3>
+                <p id="clinicianDetailEmail" class="text-secondary">{{ initial_detail.patient.email|default:'' }}</p>
             </div>
             <div class="report-actions">
-                <a id="clinicianReportLink" href="#" class="btn btn-secondary btn-sm">Open Full Report</a>
-                <a id="clinicianReportCsvLink" href="#" class="btn btn-primary btn-sm">Download CSV</a>
+                <a id="clinicianReportLink" href="{{ initial_detail.report_url|default:'#' }}" class="btn btn-secondary btn-sm">Open Full Report</a>
+                <a id="clinicianReportCsvLink" href="{% if initial_detail.report_url %}{{ initial_detail.report_url }}?download=1{% else %}#{% endif %}" class="btn btn-primary btn-sm">Download CSV</a>
             </div>
         </div>
 
-        <p id="clinicianDetailStatus" class="annotation-status"></p>
+        <p id="clinicianDetailStatus" class="annotation-status saved">Patient details loaded.</p>
 
         <div class="clinician-detail-grid">
             <div class="card">
@@ -103,7 +82,13 @@
                     <canvas id="clinicianHeatmapCanvas" width="420" height="420"></canvas>
                     <canvas id="clinicianAnnotationCanvas" width="420" height="420"></canvas>
                 </div>
-                <p id="clinicianAnnotationInfo" class="annotation-note text-secondary">No pain marks submitted.</p>
+                <p id="clinicianAnnotationInfo" class="annotation-note text-secondary">
+                    {% if initial_detail.annotation.cells %}
+                        Pain marks: {{ initial_detail.annotation.cells|length }} cells.
+                    {% else %}
+                        No pain marks submitted.
+                    {% endif %}
+                </p>
             </div>
 
             <div class="card">
@@ -111,22 +96,30 @@
                 <div class="metrics-grid clinician-metrics-grid">
                     <div class="metric-card">
                         <h4>PPI</h4>
-                        <p id="clinicianPpi" class="metric-value">--</p>
+                        <p id="clinicianPpi" class="metric-value">
+                            {% if initial_detail.latest.peak_pressure_index != None %}{{ initial_detail.latest.peak_pressure_index|floatformat:1 }}{% else %}--{% endif %}
+                        </p>
                     </div>
                     <div class="metric-card">
                         <h4>Contact %</h4>
-                        <p id="clinicianContact" class="metric-value">--</p>
+                        <p id="clinicianContact" class="metric-value">
+                            {% if initial_detail.latest.contact_area_percentage != None %}{{ initial_detail.latest.contact_area_percentage|floatformat:1 }}%{% else %}--{% endif %}
+                        </p>
                     </div>
                     <div class="metric-card">
                         <h4>Risk Score</h4>
-                        <p id="clinicianRiskScore" class="metric-value">--</p>
+                        <p id="clinicianRiskScore" class="metric-value">
+                            {% if initial_detail.latest.risk_score != None %}{{ initial_detail.latest.risk_score|floatformat:1 }}{% else %}--{% endif %}
+                        </p>
                     </div>
                     <div class="metric-card">
                         <h4>Risk Level</h4>
-                        <p id="clinicianRiskLevel" class="metric-value">--</p>
+                        <p id="clinicianRiskLevel" class="metric-value">
+                            {% if initial_detail.latest.risk_level %}{{ initial_detail.latest.risk_level|upper }}{% else %}--{% endif %}
+                        </p>
                     </div>
                 </div>
-                <p id="clinicianLatestTimestamp" class="annotation-note text-secondary">Latest frame: --</p>
+                <p id="clinicianLatestTimestamp" class="annotation-note text-secondary">Latest frame: {{ initial_detail.latest.timestamp|default:'n/a' }}</p>
                 <canvas id="clinicianTrendChart" height="180"></canvas>
             </div>
         </div>
@@ -147,7 +140,20 @@
                             </tr>
                         </thead>
                         <tbody id="clinicianFrameRows">
-                            <tr><td colspan="6" class="text-secondary">Loading...</td></tr>
+                            {% if initial_detail.recent_frames %}
+                                {% for row in initial_detail.recent_frames|slice:":30" %}
+                                <tr>
+                                    <td>{{ row.label }}</td>
+                                    <td>{{ row.peak_pressure_index|floatformat:1 }}</td>
+                                    <td>{{ row.contact_area_percentage|floatformat:1 }}%</td>
+                                    <td>{{ row.risk_score|floatformat:1 }}</td>
+                                    <td>{{ row.risk_level|upper }}</td>
+                                    <td>{{ row.comment_count }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="6" class="text-secondary">No pressure frames available.</td></tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -155,7 +161,21 @@
 
             <div class="card">
                 <h4>Recent Patient Comments</h4>
-                <div id="clinicianCommentList" class="comment-list">Loading comments...</div>
+                <div id="clinicianCommentList" class="comment-list">
+                    {% if initial_detail.recent_comments %}
+                        {% for comment in initial_detail.recent_comments|slice:":20" %}
+                        <div class="comment-item">
+                            <div class="comment-meta">Patient note at {{ comment.frame_timestamp }}</div>
+                            <div class="comment-text">{{ comment.text }}</div>
+                            {% if comment.clinician_reply %}
+                                <div class="comment-reply"><strong>Clinician reply:</strong> {{ comment.clinician_reply }}</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        No comments from this patient yet.
+                    {% endif %}
+                </div>
             </div>
         </div>
     </section>

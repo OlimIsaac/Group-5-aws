@@ -4,6 +4,28 @@
     var currentPatientId = null;
     var trendChart = null;
 
+    function getDetailApiUrl(patientId) {
+        var workspace = document.querySelector('.clinician-workspace');
+        var template = workspace && workspace.dataset.detailApiTemplate
+            ? workspace.dataset.detailApiTemplate
+            : '/clinician/api/patient/0/';
+
+        return template.replace('/0/', '/' + patientId + '/');
+    }
+
+    function readInitialDetailData() {
+        var script = document.getElementById('clinicianInitialDetailData');
+        if (!script) {
+            return null;
+        }
+
+        try {
+            return JSON.parse(script.textContent || 'null');
+        } catch (e) {
+            return null;
+        }
+    }
+
     function formatDateTime(iso) {
         if (!iso) {
             return 'n/a';
@@ -262,7 +284,7 @@
             setStatus('Loading patient details...', '');
         }
 
-        fetch('/clinician/api/patient/' + patientId + '/')
+        fetch(getDetailApiUrl(patientId))
             .then(function (response) {
                 if (!response.ok) {
                     throw new Error('Failed to load patient data');
@@ -277,6 +299,10 @@
                 renderComments(data.recent_comments || []);
                 renderTrendChart(data.trend || {});
                 setStatus('Updated ' + new Date().toLocaleTimeString(), 'saved');
+
+                if (window.history && typeof window.history.replaceState === 'function') {
+                    window.history.replaceState({}, '', '?patient=' + patientId);
+                }
             })
             .catch(function () {
                 setStatus('Unable to load patient details.', 'error');
@@ -300,8 +326,23 @@
             return;
         }
 
+        var initialDetail = readInitialDetailData();
+        if (initialDetail && initialDetail.patient) {
+            updateHeader(initialDetail.patient, initialDetail.report_url);
+            renderHeatmap(initialDetail.latest, initialDetail.annotation);
+            renderMetrics(initialDetail.latest);
+            renderFrames(initialDetail.recent_frames || []);
+            renderComments(initialDetail.recent_comments || []);
+            renderTrendChart(initialDetail.trend || {});
+        }
+
         patientItems.forEach(function (item) {
-            item.addEventListener('click', function () {
+            item.addEventListener('click', function (event) {
+                if (!window.fetch) {
+                    return;
+                }
+
+                event.preventDefault();
                 var patientId = Number(item.dataset.patientId || 0);
                 if (!patientId) {
                     return;
@@ -312,11 +353,15 @@
             });
         });
 
-        var firstPatient = Number(patientItems[0].dataset.patientId || 0);
-        if (firstPatient) {
-            currentPatientId = firstPatient;
+        var activeItem = document.querySelector('.clinician-patient-item.active');
+        var activePatientId = Number((activeItem && activeItem.dataset.patientId) || patientItems[0].dataset.patientId || 0);
+        if (activePatientId) {
+            currentPatientId = activePatientId;
             setActivePatient(currentPatientId);
-            loadPatientDetail(currentPatientId, false);
+
+            if (!initialDetail) {
+                loadPatientDetail(currentPatientId, true);
+            }
         }
 
         setInterval(function () {

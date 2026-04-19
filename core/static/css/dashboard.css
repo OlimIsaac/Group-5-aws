@@ -32,7 +32,8 @@ nav a:hover {
 
 main {
     padding: 30px;
-    max-width: 1320px;
+    width: 100%;
+    max-width: 1600px;
     margin: 0 auto;
 }
 
@@ -1114,7 +1115,7 @@ select {
 
 .clinician-workspace {
     display: grid;
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
     gap: 16px;
     align-items: start;
 }
@@ -1150,6 +1151,12 @@ select {
     color: var(--app-text) !important;
     font-size: 13px !important;
     font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.clinician-patient-item:visited {
+    color: var(--app-text) !important;
 }
 
 .clinician-patient-item:hover {
