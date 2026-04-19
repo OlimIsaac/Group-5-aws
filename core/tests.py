@@ -3,7 +3,7 @@ import unittest
 
 try:
     from .forms import PainZoneReportForm
-    from .models import PREDEFINED_ZONES, PainZoneReport, PressureFrame
+    from .models import PREDEFINED_ZONES, PainZoneReport, PressureFrame, SensorData
 except Exception as exc:  # pragma: no cover - legacy compatibility only
     raise unittest.SkipTest(f"Legacy core tests skipped: {exc}")
 
@@ -200,6 +200,24 @@ class PatientStatusAPITest(TestCase):
 
         self.assertTrue(data['chart_data']['using_fallback_window'])
         self.assertEqual(sum(data['chart_data']['total_counts']), 1)
+
+    def test_status_backfills_frames_from_sensor_data_when_missing(self):
+        SensorData.objects.create(
+            user=self.patient,
+            timestamp=timezone.now() - timedelta(minutes=30),
+            pressure_value=1850.0,
+            sensor_id='SENSOR_TEST',
+            location='seat-mat',
+        )
+
+        self.assertEqual(PressureFrame.objects.filter(user=self.patient).count(), 0)
+
+        response = self.client.get('/patient/api/status/?hours=24')
+        self.assertEqual(response.status_code, 200)
+
+        data = json.loads(response.content)
+        self.assertGreater(len(data['recent_frames']), 0)
+        self.assertGreater(PressureFrame.objects.filter(user=self.patient).count(), 0)
 
 
 class PatientFrameDetailAPITest(TestCase):

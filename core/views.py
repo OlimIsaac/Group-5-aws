@@ -178,6 +178,34 @@ def _ensure_frame_metrics(frame, save=True):
     return metrics
 
 
+def _ensure_pressure_frames_for_user(user, max_rows=500):
+    """Backfill PressureFrame rows from SensorData when frame rows are missing."""
+    if PressureFrame.objects.filter(user=user).exists():
+        return 0
+
+    sensor_rows = list(SensorData.objects.filter(user=user).order_by('timestamp')[:max_rows])
+    if not sensor_rows:
+        return 0
+
+    frame_rows = []
+    for sensor_row in sensor_rows:
+        matrix = _build_matrix_from_pressure(sensor_row.pressure_value)
+        metrics = _calculate_frame_metrics(matrix)
+        frame_rows.append(
+            PressureFrame(
+                user=user,
+                timestamp=sensor_row.timestamp,
+                raw_matrix=matrix,
+                peak_pressure_index=metrics['peak_pressure_index'],
+                contact_area_percentage=metrics['contact_area_percentage'],
+                high_pressure_flag=metrics['high_pressure_flag'],
+            )
+        )
+
+    PressureFrame.objects.bulk_create(frame_rows, batch_size=300)
+    return len(frame_rows)
+
+
 class HomeView(View):
     def get(self, request):
         if not request.user.is_authenticated:
@@ -249,6 +277,8 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.role != User.ROLE_PATIENT:
             return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        _ensure_pressure_frames_for_user(request.user)
 
         try:
             hours = int(request.GET.get('hours', 1))
@@ -355,6 +385,8 @@ class PatientLiveHeatmapAPIView(LoginRequiredMixin, View):
     def get(self, request):
         if request.user.role != User.ROLE_PATIENT:
             return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        _ensure_pressure_frames_for_user(request.user)
 
         try:
             since_frame_id = int(request.GET.get('since_frame_id', 0))
@@ -525,6 +557,7 @@ class PatientCommentsAPIView(LoginRequiredMixin, View):
 
 
 def _build_report_payload_for_user(user):
+    _ensure_pressure_frames_for_user(user)
     frames_qs = PressureFrame.objects.filter(user=user).order_by('-timestamp')
 
     frame_rows = []
