@@ -4,6 +4,18 @@
     var currentHours = 1;
     var pressureChart = null;
 
+    function getCsrfToken() {
+        var csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        return csrfMatch ? csrfMatch[1] : '';
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     // Annotation state
     var markedCells = {};   // key "r,c" -> true
     var isAnnotating = false;
@@ -166,8 +178,7 @@
             return [parseInt(p[0]), parseInt(p[1])];
         });
 
-        var csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
-        var csrfToken = csrfMatch ? csrfMatch[1] : '';
+        var csrfToken = getCsrfToken();
 
         fetch('/patient/api/heatmap-annotation/', {
             method: 'POST',
@@ -191,6 +202,112 @@
         })
         .catch(function () {
             setAnnotationStatus('Save failed — check your connection', true);
+        });
+    }
+
+    function populateFrameSelector(frames) {
+        var select = document.getElementById('commentFrameSelect');
+        if (!select) return;
+
+        select.innerHTML = '';
+        if (!frames || frames.length === 0) {
+            var empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = 'No frame available';
+            select.appendChild(empty);
+            return;
+        }
+
+        frames.slice().reverse().forEach(function (frame) {
+            var option = document.createElement('option');
+            option.value = frame.id;
+            option.textContent = frame.label;
+            select.appendChild(option);
+        });
+    }
+
+    function renderComments(comments) {
+        var list = document.getElementById('patientCommentList');
+        if (!list) return;
+
+        if (!comments || comments.length === 0) {
+            list.textContent = 'No comments yet.';
+            return;
+        }
+
+        list.innerHTML = '';
+        comments.forEach(function (comment) {
+            var item = document.createElement('div');
+            item.className = 'comment-item';
+            var replyHtml = comment.clinician_reply
+                ? '<div class="comment-reply"><strong>Clinician reply:</strong> ' + escapeHtml(comment.clinician_reply) + '</div>'
+                : '';
+            item.innerHTML =
+                '<div class="comment-meta">Frame time: ' + new Date(comment.frame_timestamp).toLocaleString() + '</div>' +
+                '<div class="comment-text">' + escapeHtml(comment.text) + '</div>' +
+                replyHtml;
+            list.appendChild(item);
+        });
+    }
+
+    function loadComments() {
+        fetch('/patient/api/comments/?hours=' + currentHours)
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                renderComments(data.comments || []);
+            })
+            .catch(function () {
+                var list = document.getElementById('patientCommentList');
+                if (list) list.textContent = 'Unable to load comments.';
+            });
+    }
+
+    function saveTimeLinkedComment() {
+        var frameSelect = document.getElementById('commentFrameSelect');
+        var commentInput = document.getElementById('commentText');
+        var status = document.getElementById('commentStatus');
+        if (!frameSelect || !commentInput || !status) return;
+
+        var frameId = frameSelect.value;
+        var text = (commentInput.value || '').trim();
+
+        if (!frameId) {
+            status.textContent = 'Select a frame time first.';
+            status.className = 'annotation-status error';
+            return;
+        }
+        if (!text) {
+            status.textContent = 'Enter a comment before saving.';
+            status.className = 'annotation-status error';
+            return;
+        }
+
+        fetch('/patient/api/comments/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify({
+                frame_id: parseInt(frameId, 10),
+                text: text,
+            }),
+        })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            if (data.error) {
+                status.textContent = data.error;
+                status.className = 'annotation-status error';
+                return;
+            }
+            commentInput.value = '';
+            status.textContent = 'Comment saved for selected frame time.';
+            status.className = 'annotation-status saved';
+            loadComments();
+        })
+        .catch(function () {
+            status.textContent = 'Failed to save comment.';
+            status.className = 'annotation-status error';
         });
     }
 
@@ -230,6 +347,13 @@
                     ? parseFloat(data.latest_contact).toFixed(1) + '%'
                     : '--';
 
+                var explanationEl = document.getElementById('simpleExplanation');
+                if (explanationEl) {
+                    explanationEl.textContent = data.explanation || 'No pressure frame available yet. Upload data to start analysis.';
+                }
+
+                populateFrameSelector(data.recent_frames || []);
+
                 // Alert banner
                 var banner = document.getElementById('alertBanner');
                 if (data.alert) {
@@ -246,6 +370,8 @@
                     pressureChart.data.datasets[0].data = data.chart_data.counts;
                     pressureChart.update();
                 }
+
+                loadComments();
             })
             .catch(function () {
                 // Silent fail — leave existing UI unchanged, keep polling
@@ -255,6 +381,12 @@
     document.addEventListener('DOMContentLoaded', function () {
         initChart();
         initAnnotation();
+
+        var saveCommentBtn = document.getElementById('saveCommentBtn');
+        if (saveCommentBtn) {
+            saveCommentBtn.addEventListener('click', saveTimeLinkedComment);
+        }
+
         loadData(1);
         setInterval(function () { loadData(currentHours); }, 8000);
 

@@ -34,6 +34,15 @@
                     <a href="{% url 'patient_list' %}">Patients</a>
                     <a href="{% url 'assignment_list' %}">Assignments</a>
                 </div>
+            {% elif user.role == user.ROLE_CLINICIAN %}
+                <div class="admin-nav-links">
+                    <a href="{% url 'clinician_dashboard' %}">Dashboard</a>
+                </div>
+            {% elif user.role == user.ROLE_PATIENT %}
+                <div class="admin-nav-links">
+                    <a href="{% url 'patient_dashboard' %}">Dashboard</a>
+                    <a href="{% url 'patient_report' %}">My Report</a>
+                </div>
             {% endif %}
             <span>{{ user.first_name|default:user.username }} ({{ user.get_role_display }})</span>
             <a href="{% url 'logout' %}">Logout</a>

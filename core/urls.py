@@ -1,7 +1,8 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .auth import LoginView, LogoutView
+
 from . import views
+from .auth import LoginView, LogoutView
 
 router = DefaultRouter()
 router.register(r'api/users', views.UserViewSet)
@@ -18,7 +19,9 @@ urlpatterns = [
     path('patient/', views.PatientDashboardView.as_view(), name='patient_dashboard'),
     path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
     path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
+    path('patient/api/comments/', views.PatientCommentsAPIView.as_view(), name='patient_comments_api'),
     path('patient/api/heatmap-annotation/', views.SaveHeatmapAnnotationView.as_view(), name='save_heatmap_annotation'),
+    path('patient/report/', views.PatientReportView.as_view(), name='patient_report'),
     path('clinician/', views.ClinicianDashboardView.as_view(), name='clinician_dashboard'),
     path('clinician/api/dashboard/', views.ClinicianDashboardDataAPIView.as_view(), name='clinician_dashboard_api'),
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),

@@ -42,6 +42,12 @@
                     <p class="annotation-note text-secondary">No pain marks reported yet</p>
                 {% endif %}
 
+                {% if pd.latest_metrics %}
+                    <p class="annotation-note">
+                        <strong>Risk:</strong> {{ pd.latest_metrics.risk_score }}/100 ({{ pd.latest_metrics.risk_level|upper }})
+                    </p>
+                {% endif %}
+
                 {% if not pd.latest_frame %}
                     <p class="text-secondary clinician-no-data">No pressure data available</p>
                 {% endif %}
