@@ -72,18 +72,42 @@ def clinician_dashboard(request):
 
     patient_summaries = []
     for patient in patient_users:
-        latest_session = SensorSession.objects.filter(patient=patient).order_by('-start_time').first()
+        sessions = list(
+            SensorSession.objects.filter(patient=patient).order_by('-start_time')[:2]
+        )
+        latest_session = sessions[0] if sessions else None
+        previous_session = sessions[1] if len(sessions) > 1 else None
+
         unack_alerts = PressureAlert.objects.filter(session__patient=patient, acknowledged=False).count()
         latest_risk = 'unknown'
+        latest_metrics = None
+        previous_metrics = None
         if latest_session:
-            latest_frame = latest_session.frames.order_by('-timestamp').first()
+            latest_frame = latest_session.frames.select_related('metrics').order_by('-timestamp').first()
             if latest_frame and hasattr(latest_frame, 'metrics'):
-                latest_risk = latest_frame.metrics.risk_level
+                latest_metrics = latest_frame.metrics
+                latest_risk = latest_metrics.risk_level
+        if previous_session:
+            previous_frame = previous_session.frames.select_related('metrics').order_by('-timestamp').first()
+            if previous_frame and hasattr(previous_frame, 'metrics'):
+                previous_metrics = previous_frame.metrics
+
+        ppi_delta = None
+        contact_delta = None
+        if latest_metrics and previous_metrics:
+            ppi_delta = latest_metrics.peak_pressure_index - previous_metrics.peak_pressure_index
+            contact_delta = latest_metrics.contact_area_percent - previous_metrics.contact_area_percent
+
         patient_summaries.append({
             'user': patient,
             'latest_session': latest_session,
+            'previous_session': previous_session,
             'unack_alerts': unack_alerts,
             'latest_risk': latest_risk,
+            'latest_metrics': latest_metrics,
+            'previous_metrics': previous_metrics,
+            'ppi_delta': ppi_delta,
+            'contact_delta': contact_delta,
         })
 
     all_alerts = PressureAlert.objects.filter(acknowledged=False).order_by('-created_at')[:10]
