@@ -4,6 +4,11 @@
     var currentPatientId = null;
     var trendChart = null;
 
+    function getCsrfToken() {
+        var csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
+        return csrfMatch ? csrfMatch[1] : '';
+    }
+
     function getDetailApiUrl(patientId) {
         var workspace = document.querySelector('.clinician-workspace');
         var template = workspace && workspace.dataset.detailApiTemplate
@@ -11,6 +16,10 @@
             : '/clinician/api/patient/0/';
 
         return template.replace('/0/', '/' + patientId + '/');
+    }
+
+    function getReplyApiUrl(commentId) {
+        return '/clinician/api/comments/' + commentId + '/reply/';
     }
 
     function readInitialDetailData() {
@@ -173,11 +182,232 @@
         comments.slice(0, 20).forEach(function (comment) {
             var item = document.createElement('div');
             item.className = 'comment-item';
+            item.setAttribute('data-comment-id', comment.id);
+            var existingReply = comment.clinician_reply
+                ? '<div class="comment-reply"><strong>Clinician reply:</strong> ' + escapeHtml(comment.clinician_reply) + '</div>'
+                : '';
             item.innerHTML =
                 '<div class="comment-meta">Patient note at ' + formatDateTime(comment.frame_timestamp) + '</div>' +
                 '<div class="comment-text">' + escapeHtml(comment.text) + '</div>' +
-                (comment.clinician_reply ? '<div class="comment-reply"><strong>Clinician reply:</strong> ' + escapeHtml(comment.clinician_reply) + '</div>' : '');
+                existingReply +
+                '<div class="clinician-reply-form">' +
+                    '<textarea class="form-input clinician-reply-input" rows="2" placeholder="Write advice or follow-up"></textarea>' +
+                    '<button type="button" class="btn btn-outline btn-sm clinician-reply-btn" data-comment-id="' + comment.id + '">Save Reply</button>' +
+                '</div>';
             list.appendChild(item);
+        });
+    }
+
+    function riskRank(level) {
+        var value = String(level || 'none').toLowerCase();
+        if (value === 'critical') return 4;
+        if (value === 'high') return 3;
+        if (value === 'moderate') return 2;
+        if (value === 'low') return 1;
+        return 0;
+    }
+
+    function parseIsoDate(isoText) {
+        if (!isoText) {
+            return 0;
+        }
+        var ms = Date.parse(isoText);
+        return isFinite(ms) ? ms : 0;
+    }
+
+    function sortPatientItems(items, mode) {
+        var sorted = items.slice();
+
+        sorted.sort(function (a, b) {
+            var riskA = riskRank(a.dataset.riskLevel);
+            var riskB = riskRank(b.dataset.riskLevel);
+            var tsA = parseIsoDate(a.dataset.latestTs);
+            var tsB = parseIsoDate(b.dataset.latestTs);
+            var nameA = String(a.dataset.patientName || '').toLowerCase();
+            var nameB = String(b.dataset.patientName || '').toLowerCase();
+
+            if (mode === 'name') {
+                return nameA.localeCompare(nameB);
+            }
+
+            if (mode === 'recent') {
+                if (tsA !== tsB) {
+                    return tsB - tsA;
+                }
+                if (riskA !== riskB) {
+                    return riskB - riskA;
+                }
+                return nameA.localeCompare(nameB);
+            }
+
+            if (riskA !== riskB) {
+                return riskB - riskA;
+            }
+            if (tsA !== tsB) {
+                return tsB - tsA;
+            }
+            return nameA.localeCompare(nameB);
+        });
+
+        return sorted;
+    }
+
+    function applySidebarControls() {
+        var list = document.getElementById('clinicianPatientList');
+        if (!list) {
+            return;
+        }
+
+        var searchEl = document.getElementById('clinicianPatientSearch');
+        var filterEl = document.getElementById('clinicianRiskFilter');
+        var sortEl = document.getElementById('clinicianSortOrder');
+        var countEl = document.getElementById('clinicianListCount');
+
+        var searchText = (searchEl && searchEl.value ? searchEl.value : '').trim().toLowerCase();
+        var riskFilter = filterEl ? filterEl.value : 'all';
+        var sortMode = sortEl ? sortEl.value : 'risk';
+
+        var items = Array.prototype.slice.call(list.querySelectorAll('.clinician-patient-item'));
+        var sorted = sortPatientItems(items, sortMode);
+
+        sorted.forEach(function (item) {
+            list.appendChild(item);
+        });
+
+        var shownCount = 0;
+        sorted.forEach(function (item) {
+            var name = String(item.dataset.patientName || '').toLowerCase();
+            var username = String(item.dataset.patientUsername || '').toLowerCase();
+            var email = String(item.dataset.patientEmail || '').toLowerCase();
+            var risk = String(item.dataset.riskLevel || 'none').toLowerCase();
+
+            var matchesSearch = !searchText
+                || name.indexOf(searchText) >= 0
+                || username.indexOf(searchText) >= 0
+                || email.indexOf(searchText) >= 0;
+
+            var matchesRisk = false;
+            if (riskFilter === 'all') {
+                matchesRisk = true;
+            } else if (riskFilter === 'high') {
+                matchesRisk = (risk === 'high' || risk === 'critical');
+            } else if (riskFilter === 'moderate') {
+                matchesRisk = (risk === 'moderate' || risk === 'high' || risk === 'critical');
+            } else {
+                matchesRisk = risk === riskFilter;
+            }
+
+            var visible = matchesSearch && matchesRisk;
+            item.style.display = visible ? '' : 'none';
+            if (visible) {
+                shownCount += 1;
+            }
+        });
+
+        if (countEl) {
+            countEl.textContent = 'Showing ' + shownCount + ' of ' + items.length + ' patients';
+        }
+
+        var activeItem = list.querySelector('.clinician-patient-item.active');
+        if (activeItem && activeItem.style.display === 'none') {
+            var firstVisible = sorted.find(function (item) { return item.style.display !== 'none'; });
+            if (firstVisible) {
+                var patientId = Number(firstVisible.dataset.patientId || 0);
+                if (patientId) {
+                    currentPatientId = patientId;
+                    setActivePatient(patientId);
+                    loadPatientDetail(patientId, false);
+                }
+            }
+        }
+    }
+
+    function bindSidebarControls() {
+        var searchEl = document.getElementById('clinicianPatientSearch');
+        var filterEl = document.getElementById('clinicianRiskFilter');
+        var sortEl = document.getElementById('clinicianSortOrder');
+
+        if (searchEl) {
+            searchEl.addEventListener('input', applySidebarControls);
+        }
+        if (filterEl) {
+            filterEl.addEventListener('change', applySidebarControls);
+        }
+        if (sortEl) {
+            sortEl.addEventListener('change', applySidebarControls);
+        }
+
+        applySidebarControls();
+    }
+
+    function submitCommentReply(commentId, replyText, buttonEl, cardEl) {
+        if (!commentId) {
+            return;
+        }
+
+        buttonEl.disabled = true;
+        var originalText = buttonEl.textContent;
+        buttonEl.textContent = 'Saving...';
+
+        fetch(getReplyApiUrl(commentId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify({ reply: replyText }),
+        })
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (data.error) {
+                    setStatus(data.error, 'error');
+                    return;
+                }
+
+                var replyEl = cardEl.querySelector('.comment-reply');
+                if (!replyEl) {
+                    replyEl = document.createElement('div');
+                    replyEl.className = 'comment-reply';
+                    cardEl.insertBefore(replyEl, cardEl.querySelector('.clinician-reply-form'));
+                }
+                replyEl.innerHTML = '<strong>Clinician reply:</strong> ' + escapeHtml(data.clinician_reply || replyText);
+                setStatus('Reply saved.', 'saved');
+            })
+            .catch(function () {
+                setStatus('Failed to save reply.', 'error');
+            })
+            .finally(function () {
+                buttonEl.disabled = false;
+                buttonEl.textContent = originalText;
+            });
+    }
+
+    function bindCommentReplyActions() {
+        var list = document.getElementById('clinicianCommentList');
+        if (!list) {
+            return;
+        }
+
+        list.addEventListener('click', function (event) {
+            var target = event.target;
+            if (!target || !target.classList || !target.classList.contains('clinician-reply-btn')) {
+                return;
+            }
+
+            var commentId = Number(target.dataset.commentId || 0);
+            var card = target.closest('.comment-item');
+            if (!card) {
+                return;
+            }
+
+            var input = card.querySelector('.clinician-reply-input');
+            var replyText = input ? String(input.value || '').trim() : '';
+            if (!replyText) {
+                setStatus('Reply text is required.', 'error');
+                return;
+            }
+
+            submitCommentReply(commentId, replyText, target, card);
         });
     }
 
@@ -314,6 +544,7 @@
             .then(function (response) { return response.json(); })
             .then(function (data) {
                 updateSidebarSummary(data);
+                applySidebarControls();
             })
             .catch(function () {
                 // keep existing sidebar state
@@ -335,6 +566,9 @@
             renderComments(initialDetail.recent_comments || []);
             renderTrendChart(initialDetail.trend || {});
         }
+
+        bindSidebarControls();
+        bindCommentReplyActions();
 
         patientItems.forEach(function (item) {
             item.addEventListener('click', function (event) {

@@ -34,16 +34,41 @@
 <div class="card clinician-workspace" data-detail-api-template="{% url 'clinician_patient_detail_api' 0 %}">
     <aside class="clinician-sidebar">
         <h3>Assigned Patients</h3>
+        <div class="clinician-sidebar-controls">
+            <label for="clinicianPatientSearch" class="sr-only">Search patients</label>
+            <input id="clinicianPatientSearch" type="search" class="form-input" placeholder="Search name, username, email">
+            <div class="clinician-sidebar-row">
+                <label for="clinicianRiskFilter" class="sr-only">Filter by risk</label>
+                <select id="clinicianRiskFilter" class="form-input" title="Filter patients by risk">
+                    <option value="all">All risks</option>
+                    <option value="critical">Critical only</option>
+                    <option value="high">High and above</option>
+                    <option value="moderate">Moderate and above</option>
+                    <option value="low">Low only</option>
+                    <option value="none">No data</option>
+                </select>
+                <label for="clinicianSortOrder" class="sr-only">Sort patients</label>
+                <select id="clinicianSortOrder" class="form-input" title="Sort patients">
+                    <option value="risk">Sort: Risk first</option>
+                    <option value="recent">Sort: Most recent frame</option>
+                    <option value="name">Sort: Name</option>
+                </select>
+            </div>
+            <p id="clinicianListCount" class="annotation-note text-secondary"></p>
+        </div>
         <div id="clinicianPatientList" class="clinician-patient-list">
             {% for pd in patients_data %}
             <a href="?patient={{ pd.patient_id }}"
                     class="{{ pd.item_class }}"
                     data-patient-id="{{ pd.patient_id }}"
                     data-patient-name="{{ pd.patient_name }}"
+                    data-patient-username="{{ pd.patient_username }}"
                     data-patient-email="{{ pd.patient_email }}"
+                    data-risk-level="{{ pd.latest_risk_level|default:'none' }}"
+                    data-latest-ts="{% if pd.latest_timestamp %}{{ pd.latest_timestamp|date:'c' }}{% endif %}"
                     data-report-url="{{ pd.report_url }}">
                 <span class="clinician-patient-item-name">{{ pd.patient_name }}</span>
-                <span class="clinician-patient-item-email">{{ pd.patient_email }}</span>
+                <span class="clinician-patient-item-email">{{ pd.patient_username }} · {{ pd.patient_email }}</span>
                 <span class="clinician-patient-item-meta">
                     {% if pd.has_data %}
                         <span class="risk-pill risk-{{ pd.latest_risk_level|default:'low' }}">
@@ -51,6 +76,9 @@
                         </span>
                         <span>
                             PPI {{ pd.latest_ppi|default:'--' }}
+                        </span>
+                        <span>
+                            {% if pd.latest_timestamp %}{{ pd.latest_timestamp|date:'M j, H:i' }}{% else %}No recent frame{% endif %}
                         </span>
                     {% else %}
                         <span class="risk-pill risk-none">NO DATA</span>
@@ -164,12 +192,16 @@
                 <div id="clinicianCommentList" class="comment-list">
                     {% if initial_detail.recent_comments %}
                         {% for comment in initial_detail.recent_comments|slice:":20" %}
-                        <div class="comment-item">
+                        <div class="comment-item" data-comment-id="{{ comment.id }}">
                             <div class="comment-meta">Patient note at {{ comment.frame_timestamp }}</div>
                             <div class="comment-text">{{ comment.text }}</div>
                             {% if comment.clinician_reply %}
                                 <div class="comment-reply"><strong>Clinician reply:</strong> {{ comment.clinician_reply }}</div>
                             {% endif %}
+                            <div class="clinician-reply-form">
+                                <textarea class="form-input clinician-reply-input" rows="2" placeholder="Write advice or follow-up"></textarea>
+                                <button type="button" class="btn btn-outline btn-sm clinician-reply-btn" data-comment-id="{{ comment.id }}">Save Reply</button>
+                            </div>
                         </div>
                         {% endfor %}
                     {% else %}

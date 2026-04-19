@@ -26,6 +26,7 @@ urlpatterns = [
     path('clinician/', views.ClinicianDashboardView.as_view(), name='clinician_dashboard'),
     path('clinician/api/dashboard/', views.ClinicianDashboardDataAPIView.as_view(), name='clinician_dashboard_api'),
     path('clinician/api/patient/<int:patient_id>/', views.ClinicianPatientDetailAPIView.as_view(), name='clinician_patient_detail_api'),
+    path('clinician/api/comments/<int:comment_id>/reply/', views.ClinicianCommentReplyAPIView.as_view(), name='clinician_comment_reply_api'),
     path('clinician/patient/<int:patient_id>/report/', views.ClinicianPatientReportView.as_view(), name='clinician_patient_report'),
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
     

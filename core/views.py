@@ -668,6 +668,7 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
                 patients_data.append({
                     'patient_id': patient_user.id,
                     'patient_name': patient_user.get_full_name() or patient_user.username,
+                    'patient_username': patient_user.username,
                     'patient_email': patient_user.email,
                     'report_url': f'/clinician/patient/{patient_user.id}/report/',
                     'item_class': 'clinician-patient-item active' if selected_patient_id == patient_user.id else 'clinician-patient-item',
@@ -760,6 +761,44 @@ class ClinicianPatientDetailAPIView(LoginRequiredMixin, View):
             return JsonResponse({'error': 'Patient not assigned to this clinician'}, status=404)
 
         return JsonResponse(_build_clinician_patient_detail_payload(assignment.patient))
+
+
+class ClinicianCommentReplyAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def post(self, request, comment_id):
+        if request.user.role != User.ROLE_CLINICIAN:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+        except Exception:
+            body = {}
+
+        reply_text = (body.get('reply') or '').strip()
+        if not reply_text:
+            return JsonResponse({'error': 'Reply text is required.'}, status=400)
+
+        comment = get_object_or_404(
+            Comment.objects.select_related('pressure_frame', 'user'),
+            pk=comment_id,
+        )
+
+        is_assigned = ClinicianPatientAssignment.objects.filter(
+            clinician=request.user,
+            patient=comment.user,
+        ).exists()
+        if not is_assigned:
+            return JsonResponse({'error': 'Patient not assigned to this clinician.'}, status=403)
+
+        comment.clinician_reply = reply_text
+        comment.save(update_fields=['clinician_reply'])
+
+        return JsonResponse({
+            'id': comment.id,
+            'clinician_reply': comment.clinician_reply,
+            'frame_timestamp': comment.pressure_frame.timestamp.isoformat(),
+        })
 
 
 class ClinicianPatientReportView(LoginRequiredMixin, View):
