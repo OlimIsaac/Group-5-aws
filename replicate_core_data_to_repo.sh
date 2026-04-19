@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="import"
-PYTHON_BIN="python"
+PYTHON_BIN="python3"
 MANAGE_PATH="$SCRIPT_DIR/manage.py"
 FIXTURE_PATH="$SCRIPT_DIR/sample_data/core_data_replica.json"
 ASSUME_YES=0
