@@ -24,7 +24,10 @@ class Command(BaseCommand):
         parser.add_argument("--feedback-per-patient", type=int, default=2)
         parser.add_argument("--days-window", type=int, default=21)
         parser.add_argument("--password", type=str, default="test123")
+        parser.add_argument("--admin-password", type=str, default="admin123")
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument("--focus-clinician", type=str, default="clinician1")
+        parser.add_argument("--focus-patient-count", type=int, default=120)
         parser.add_argument(
             "--include-existing-patients",
             action="store_true",
@@ -42,6 +45,9 @@ class Command(BaseCommand):
         feedback_per_patient = max(0, int(options["feedback_per_patient"]))
         days_window = max(1, int(options["days_window"]))
         password = options["password"]
+        admin_password = options["admin_password"]
+        focus_clinician_username = options["focus_clinician"].strip()
+        focus_patient_count = max(0, int(options["focus_patient_count"]))
         include_existing = bool(options["include_existing_patients"])
 
         first_names = [
@@ -83,8 +89,11 @@ class Command(BaseCommand):
         admin_user.is_staff = True
         admin_user.is_superuser = True
         admin_user.email = admin_user.email or "admin@sensore.local"
-        admin_user.set_password(password)
+        admin_user.set_password(admin_password)
         admin_user.save()
+
+        self._ensure_demo_account(username="clinician1", role=User.ROLE_CLINICIAN, password="clinician123")
+        self._ensure_demo_account(username="patient1", role=User.ROLE_PATIENT, password="patient123")
 
         created_clinicians = self._ensure_clinicians(
             clinician_count=clinician_count,
@@ -107,6 +116,11 @@ class Command(BaseCommand):
             patients.extend(list(existing_patients))
 
         created_assignments = self._ensure_assignments(clinicians, patients, rng)
+        focused_assignments = self._focus_assignments(
+            clinician_username=focus_clinician_username,
+            focus_patient_count=focus_patient_count,
+            rng=rng,
+        )
 
         stats = {
             "sensor_rows": 0,
@@ -161,6 +175,7 @@ class Command(BaseCommand):
                     f"new clinicians={created_clinicians}",
                     f"new patients={created_patients}",
                     f"new assignments={created_assignments}",
+                    f"focus assignments={focused_assignments}",
                     f"patients seeded={stats['patients_seeded']}",
                     f"patients skipped={stats['patients_skipped']}",
                     f"sensor rows={stats['sensor_rows']}",
@@ -175,6 +190,27 @@ class Command(BaseCommand):
         self.stdout.write(
             f"Login password for generated users: {password} (usernames start with clinician_bulk_ / patient_bulk_)"
         )
+        self.stdout.write("Stable demo credentials preserved: admin/admin123, clinician1/clinician123, patient1/patient123")
+
+    def _ensure_demo_account(self, username, role, password):
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={
+                "role": role,
+                "email": f"{username}@sensore.local",
+            },
+        )
+        user.role = role
+        user.email = user.email or f"{username}@sensore.local"
+        user.set_password(password)
+        user.save()
+
+        if role == User.ROLE_CLINICIAN:
+            ClinicianProfile.objects.get_or_create(user=user)
+        elif role == User.ROLE_PATIENT:
+            PatientProfile.objects.get_or_create(user=user)
+
+        return created
 
     def _ensure_clinicians(self, clinician_count, password, first_names, last_names):
         usernames = [f"clinician_bulk_{idx:03d}" for idx in range(1, clinician_count + 1)]
@@ -261,6 +297,44 @@ class Command(BaseCommand):
                     clinician=clinician,
                     patient=patient,
                     assigned_at=timezone.now() - timedelta(days=rng.randint(1, 120)),
+                )
+            )
+
+        if to_create:
+            ClinicianPatientAssignment.objects.bulk_create(to_create, batch_size=400)
+
+        return len(to_create)
+
+    def _focus_assignments(self, clinician_username, focus_patient_count, rng):
+        if not clinician_username or focus_patient_count <= 0:
+            return 0
+
+        clinician = User.objects.filter(username=clinician_username, role=User.ROLE_CLINICIAN).first()
+        if not clinician:
+            return 0
+
+        target_patients = list(
+            User.objects.filter(role=User.ROLE_PATIENT)
+            .exclude(username="patient1")
+            .order_by("username")[:focus_patient_count]
+        )
+        if not target_patients:
+            return 0
+
+        existing_patient_ids = set(
+            ClinicianPatientAssignment.objects.filter(clinician=clinician, patient__in=target_patients)
+            .values_list("patient_id", flat=True)
+        )
+
+        to_create = []
+        for patient in target_patients:
+            if patient.id in existing_patient_ids:
+                continue
+            to_create.append(
+                ClinicianPatientAssignment(
+                    clinician=clinician,
+                    patient=patient,
+                    assigned_at=timezone.now() - timedelta(days=rng.randint(1, 45)),
                 )
             )
 
