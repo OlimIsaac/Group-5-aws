@@ -559,6 +559,7 @@ def _build_clinician_patient_detail_payload(patient, frame_limit=120, comment_li
         'ppi': [point['peak_pressure_index'] for point in trend_points],
         'risk': [point['risk_score'] for point in trend_points],
         'contact': [point['contact_area_percentage'] for point in trend_points],
+        'frame_ids': [point['id'] for point in trend_points],
     }
 
     return {
@@ -569,6 +570,7 @@ def _build_clinician_patient_detail_payload(patient, frame_limit=120, comment_li
         },
         'report_url': f'/clinician/patient/{patient.id}/report/',
         'latest': {
+            'frame_id': latest_frame.id if latest_frame else None,
             'timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
             'matrix': latest_metrics['matrix'] if latest_metrics else None,
             'peak_pressure_index': latest_metrics['peak_pressure_index'] if latest_metrics else None,
@@ -585,6 +587,25 @@ def _build_clinician_patient_detail_payload(patient, frame_limit=120, comment_li
         'recent_frames': recent_frames,
         'recent_comments': recent_comments,
         'trend': trend,
+    }
+
+
+def _build_clinician_frame_detail_payload(frame):
+    metrics = _ensure_frame_metrics(frame)
+    if not metrics:
+        return None
+
+    return {
+        'id': frame.id,
+        'timestamp': frame.timestamp.isoformat(),
+        'label': frame.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+        'matrix': metrics['matrix'],
+        'peak_pressure_index': metrics['peak_pressure_index'],
+        'contact_area_percentage': metrics['contact_area_percentage'],
+        'risk_score': metrics['risk_score'],
+        'risk_level': metrics['risk_level'],
+        'high_pressure_flag': metrics['high_pressure_flag'],
+        'comment_count': frame.comments.count(),
     }
 
 
@@ -763,6 +784,33 @@ class ClinicianPatientDetailAPIView(LoginRequiredMixin, View):
             return JsonResponse({'error': 'Patient not assigned to this clinician'}, status=404)
 
         return JsonResponse(_build_clinician_patient_detail_payload(assignment.patient))
+
+
+class ClinicianPatientFrameDetailAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request, patient_id, frame_id):
+        if request.user.role != User.ROLE_CLINICIAN:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        assignment = (
+            ClinicianPatientAssignment.objects
+            .filter(clinician=request.user, patient_id=patient_id)
+            .select_related('patient')
+            .first()
+        )
+        if not assignment:
+            return JsonResponse({'error': 'Patient not assigned to this clinician'}, status=404)
+
+        frame = PressureFrame.objects.filter(user=assignment.patient, pk=frame_id).first()
+        if not frame:
+            return JsonResponse({'error': 'Frame not found for this patient'}, status=404)
+
+        payload = _build_clinician_frame_detail_payload(frame)
+        if not payload:
+            return JsonResponse({'error': 'Frame metrics unavailable'}, status=422)
+
+        return JsonResponse(payload)
 
 
 class ClinicianCommentReplyAPIView(LoginRequiredMixin, View):

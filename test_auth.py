@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 
+
 def main():
     import django
     from django.contrib.auth import authenticate

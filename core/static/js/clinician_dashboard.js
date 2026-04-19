@@ -2,6 +2,7 @@
     'use strict';
 
     var currentPatientId = null;
+    var selectedFrameId = null;
     var trendChart = null;
 
     function getCsrfToken() {
@@ -16,6 +17,16 @@
             : '/clinician/api/patient/0/';
 
         return template.replace('/0/', '/' + patientId + '/');
+    }
+
+    function getFrameDetailApiUrl(patientId, frameId) {
+        var workspace = document.querySelector('.clin-workspace');
+        var template = workspace && workspace.dataset.frameDetailApiTemplate
+            ? workspace.dataset.frameDetailApiTemplate
+            : '/clinician/api/patient/0/frames/0/';
+
+        return template
+            .replace('/0/frames/0/', '/' + patientId + '/frames/' + frameId + '/');
     }
 
     function getReplyApiUrl(commentId) {
@@ -303,6 +314,62 @@
         if (tsEl) tsEl.textContent = 'Latest frame: ' + formatDateTime(latest.timestamp);
     }
 
+    function setSelectedFrameRow(frameId) {
+        var rows = document.querySelectorAll('#clinicianFrameRows .clin-frame-row');
+        rows.forEach(function (row) {
+            row.classList.toggle('is-selected', Number(row.dataset.frameId) === Number(frameId));
+        });
+    }
+
+    function applySelectedFrameDetail(frameDetail, annotation) {
+        if (!frameDetail) {
+            return;
+        }
+
+        selectedFrameId = Number(frameDetail.id || 0) || null;
+        setSelectedFrameRow(selectedFrameId);
+        renderHeatmap({
+            matrix: frameDetail.matrix,
+            timestamp: frameDetail.timestamp,
+            peak_pressure_index: frameDetail.peak_pressure_index,
+            contact_area_percentage: frameDetail.contact_area_percentage,
+            risk_score: frameDetail.risk_score,
+            risk_level: frameDetail.risk_level,
+            high_pressure_flag: frameDetail.high_pressure_flag,
+        }, annotation || null);
+        renderMetrics({
+            timestamp: frameDetail.timestamp,
+            peak_pressure_index: frameDetail.peak_pressure_index,
+            contact_area_percentage: frameDetail.contact_area_percentage,
+            risk_score: frameDetail.risk_score,
+            risk_level: frameDetail.risk_level,
+            high_pressure_flag: frameDetail.high_pressure_flag,
+        });
+    }
+
+    function loadFrameDetail(frameId, annotation) {
+        if (!currentPatientId || !frameId) {
+            return;
+        }
+
+        setStatus('Loading selected frame...', '');
+
+        fetch(getFrameDetailApiUrl(currentPatientId, frameId))
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load frame data');
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                applySelectedFrameDetail(data, annotation);
+                setStatus('Frame loaded: ' + formatDateTime(data.timestamp), 'saved');
+            })
+            .catch(function () {
+                setStatus('Unable to load selected frame.', 'error');
+            });
+    }
+
     function renderFrames(rows) {
         var body = document.getElementById('clinicianFrameRows');
         if (!body) {
@@ -314,8 +381,8 @@
             return;
         }
 
-        var html = rows.slice(0, 30).map(function (row) {
-            return '<tr>' +
+        var html = rows.map(function (row) {
+            return '<tr class="clin-frame-row" data-frame-id="' + Number(row.id || 0) + '">' +
                 '<td>' + formatDateTime(row.timestamp) + '</td>' +
                 '<td>' + Number(row.peak_pressure_index).toFixed(1) + '</td>' +
                 '<td>' + Number(row.contact_area_percentage).toFixed(1) + '%</td>' +
@@ -326,6 +393,10 @@
         }).join('');
 
         body.innerHTML = html;
+
+        if (selectedFrameId) {
+            setSelectedFrameRow(selectedFrameId);
+        }
     }
 
     function renderComments(comments) {
@@ -572,7 +643,7 @@
         });
     }
 
-    function renderTrendChart(trend) {
+    function renderTrendChart(trend, annotation) {
         var canvas = document.getElementById('clinicianTrendChart');
         if (!canvas || typeof Chart === 'undefined') {
             return;
@@ -586,6 +657,7 @@
         var labels = (trend && Array.isArray(trend.labels)) ? trend.labels : [];
         var ppi = (trend && Array.isArray(trend.ppi)) ? trend.ppi : [];
         var risk = (trend && Array.isArray(trend.risk)) ? trend.risk : [];
+        var frameIds = (trend && Array.isArray(trend.frame_ids)) ? trend.frame_ids : [];
 
         // Get theme-aware colors
         var isDark = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -602,7 +674,9 @@
                         data: ppi,
                         borderColor: '#00d4c8',
                         backgroundColor: 'rgba(0,212,200,0.1)',
-                        pointRadius: 1,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        pointHitRadius: 14,
                         tension: 0.3,
                         borderWidth: 2,
                         yAxisID: 'y',
@@ -612,7 +686,9 @@
                         data: risk,
                         borderColor: '#ef4444',
                         backgroundColor: 'rgba(239,68,68,0.1)',
-                        pointRadius: 1,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        pointHitRadius: 14,
                         tension: 0.3,
                         borderWidth: 2,
                         yAxisID: 'y1',
@@ -622,6 +698,27 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false,
+                },
+                onHover: function (event, activeElements) {
+                    if (event && event.native && event.native.target) {
+                        event.native.target.style.cursor = activeElements && activeElements.length ? 'pointer' : 'default';
+                    }
+                },
+                onClick: function (event, activeElements) {
+                    if (!activeElements || !activeElements.length) {
+                        return;
+                    }
+                    var pointIndex = activeElements[0].index;
+                    var frameId = Number(frameIds[pointIndex] || 0);
+                    if (!frameId) {
+                        return;
+                    }
+                    loadFrameDetail(frameId, annotation || null);
+                },
                 plugins: {
                     legend: {
                         labels: {
@@ -659,6 +756,25 @@
         document.querySelectorAll('.clin-patient-item').forEach(function (item) {
             item.classList.toggle('active', Number(item.dataset.patientId) === Number(patientId));
         });
+    }
+
+    function bindFrameRowActions(annotation) {
+        var body = document.getElementById('clinicianFrameRows');
+        if (!body) {
+            return;
+        }
+
+        body.onclick = function (event) {
+            var row = event.target && event.target.closest ? event.target.closest('.clin-frame-row') : null;
+            if (!row) {
+                return;
+            }
+            var frameId = Number(row.dataset.frameId || 0);
+            if (!frameId) {
+                return;
+            }
+            loadFrameDetail(frameId, annotation || null);
+        };
     }
 
     function updateSidebarSummary(data) {
@@ -713,9 +829,34 @@
                 });
 
                 renderMetrics(data.latest);
+
+                if (data.latest && data.latest.frame_id) {
+                    if (!selectedFrameId) {
+                        selectedFrameId = Number(data.latest.frame_id);
+                    }
+                }
+
                 renderFrames(data.recent_frames || []);
+                bindFrameRowActions(data.annotation || null);
+
+                if (selectedFrameId) {
+                    var visibleIds = (data.recent_frames || []).map(function (row) { return Number(row.id || 0); });
+                    if (visibleIds.indexOf(Number(selectedFrameId)) === -1) {
+                        selectedFrameId = data.latest && data.latest.frame_id ? Number(data.latest.frame_id) : null;
+                    }
+                } else {
+                    selectedFrameId = data.latest && data.latest.frame_id ? Number(data.latest.frame_id) : null;
+                }
+
+                setSelectedFrameRow(selectedFrameId);
+
+                var latestFrameId = data.latest && data.latest.frame_id ? Number(data.latest.frame_id) : null;
+                if (selectedFrameId && latestFrameId && selectedFrameId !== latestFrameId) {
+                    loadFrameDetail(selectedFrameId, data.annotation || null);
+                }
+
                 renderComments(data.recent_comments || []);
-                renderTrendChart(data.trend || {});
+                renderTrendChart(data.trend || {}, data.annotation || null);
                 setStatus('Updated ' + new Date().toLocaleTimeString(), 'saved');
 
                 if (window.history && typeof window.history.replaceState === 'function') {
@@ -756,9 +897,14 @@
             });
 
             renderMetrics(initialDetail.latest);
+            if (initialDetail.latest && initialDetail.latest.frame_id) {
+                selectedFrameId = Number(initialDetail.latest.frame_id);
+            }
             renderFrames(initialDetail.recent_frames || []);
+            bindFrameRowActions(initialDetail.annotation || null);
+            setSelectedFrameRow(selectedFrameId);
             renderComments(initialDetail.recent_comments || []);
-            renderTrendChart(initialDetail.trend || {});
+            renderTrendChart(initialDetail.trend || {}, initialDetail.annotation || null);
         }
 
         bindSidebarControls();
@@ -776,6 +922,7 @@
                     return;
                 }
                 currentPatientId = patientId;
+                selectedFrameId = null;
                 setActivePatient(currentPatientId);
                 loadPatientDetail(currentPatientId, false);
             });

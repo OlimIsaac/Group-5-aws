@@ -192,7 +192,7 @@
   /* ── HEATMAP + METRICS ROW ── */
   .clin-viz-row {
     display: grid;
-    grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
     gap: 1.25rem;
     align-items: start;
     margin-bottom: 1.25rem;
@@ -215,7 +215,7 @@
   .clin-heatmap-wrap {
     position: relative;
     width: 100%;
-    max-width: 320px;
+    max-width: 420px;
     margin: 0 auto;
     background: rgba(10,22,40,0.5);
     border: 1px solid rgba(0,212,200,0.1);
@@ -246,7 +246,7 @@
     justify-content: center;
     width: 100%;
     aspect-ratio: 1;
-    max-width: 320px;
+    max-width: 420px;
     margin: 0 auto;
     background: rgba(10,22,40,0.3);
     border: 1px dashed rgba(90,122,154,0.3);
@@ -381,6 +381,11 @@
     border-bottom: 1px solid var(--line-faint);
   }
   .clin-frames-table tbody tr:hover { background: var(--row-hover); }
+  .clin-frames-table tbody tr.is-selected {
+    background: rgba(0,212,200,0.10);
+    box-shadow: inset 3px 0 0 rgba(0,212,200,0.65);
+  }
+  .clin-frames-table tbody tr.clin-frame-row { cursor: pointer; }
   .clin-frames-table tbody tr:last-child td { border-bottom: none; }
   .clin-frames-scroll {
     max-height: 340px;
@@ -515,7 +520,9 @@
   </div>
 
   <!-- ── WORKSPACE ── -->
-  <div class="clin-workspace" data-detail-api-template="{% url 'clinician_patient_detail_api' 0 %}">
+    <div class="clin-workspace"
+      data-detail-api-template="{% url 'clinician_patient_detail_api' 0 %}"
+      data-frame-detail-api-template="{% url 'clinician_patient_frame_detail_api' 0 0 %}">
 
     <!-- ── SIDEBAR ── -->
     <div class="clin-sidebar">
@@ -593,8 +600,8 @@
         <div class="clin-heatmap-card">
           <div class="card-label">Pressure Heatmap</div>
           <div class="clin-heatmap-wrap" id="clinicianHeatmapContainer">
-            <canvas id="clinicianHeatmapCanvas" class="patient-heatmap" width="320" height="320"></canvas>
-            <canvas id="clinicianAnnotationCanvas" class="patient-annotation" width="320" height="320"></canvas>
+            <canvas id="clinicianHeatmapCanvas" class="patient-heatmap" width="420" height="420"></canvas>
+            <canvas id="clinicianAnnotationCanvas" class="patient-annotation" width="420" height="420"></canvas>
           </div>
           <p id="clinicianAnnotationInfo" class="clin-heatmap-note">
             {% if initial_detail.annotation.cells %}
@@ -634,6 +641,7 @@
             </div>
           </div>
           <p id="clinicianLatestTimestamp" class="clin-latest-ts">Latest frame: {{ initial_detail.latest.timestamp|default:'n/a' }}</p>
+          <p class="clin-latest-ts">Tip: click any Recent Frames row or trend point to inspect that frame's heatmap.</p>
           <div class="clin-trend-wrap">
             <canvas id="clinicianTrendChart"></canvas>
           </div>
@@ -663,8 +671,8 @@
               </thead>
               <tbody id="clinicianFrameRows">
                 {% if initial_detail.recent_frames %}
-                  {% for row in initial_detail.recent_frames|slice:":30" %}
-                  <tr>
+                  {% for row in initial_detail.recent_frames %}
+                  <tr class="clin-frame-row" data-frame-id="{{ row.id }}">
                     <td>{{ row.label }}</td>
                     <td>{{ row.peak_pressure_index|floatformat:1 }}</td>
                     <td>{{ row.contact_area_percentage|floatformat:1 }}%</td>
