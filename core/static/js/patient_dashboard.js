@@ -14,6 +14,25 @@
     var COMMENTS_REFRESH_MS = 30000;
     var HEATMAP_TRANSITION_MS = 450;
 
+    function getDashboardRoot() {
+        return document.getElementById('patientDashboardApp');
+    }
+
+    function getApiUrl(datasetKey, fallbackUrl) {
+        var root = getDashboardRoot();
+        if (root && root.dataset && root.dataset[datasetKey]) {
+            return root.dataset[datasetKey];
+        }
+        return fallbackUrl;
+    }
+
+    function appendQuery(url, query) {
+        if (!query) {
+            return url;
+        }
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + query;
+    }
+
     function getCsrfToken() {
         var csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
         return csrfMatch ? csrfMatch[1] : '';
@@ -156,7 +175,8 @@
     }
 
     function getFrameDetailApiUrl(frameId) {
-        return '/patient/api/frames/' + frameId + '/';
+        var template = getApiUrl('frameDetailApiTemplate', '/patient/api/frames/0/');
+        return template.replace(/0\/?$/, String(frameId) + '/');
     }
 
     function getFrameSelectValue() {
@@ -396,7 +416,7 @@
 
         var csrfToken = getCsrfToken();
 
-        fetch('/patient/api/heatmap-annotation/', {
+        fetch(getApiUrl('annotationApi', '/patient/api/heatmap-annotation/'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -477,7 +497,7 @@
     }
 
     function loadComments() {
-        fetch('/patient/api/comments/?hours=all')
+        fetch(appendQuery(getApiUrl('commentsApi', '/patient/api/comments/'), 'hours=all'))
             .then(function (response) { return response.json(); })
             .then(function (data) {
                 renderComments(data.comments || []);
@@ -508,7 +528,7 @@
             return;
         }
 
-        fetch('/patient/api/comments/', {
+        fetch(getApiUrl('commentsApi', '/patient/api/comments/'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -577,7 +597,7 @@
 
         liveRequestInFlight = true;
 
-        fetch('/patient/api/live/?since_frame_id=' + encodeURIComponent(latestFrameId || 0))
+        fetch(appendQuery(getApiUrl('liveApi', '/patient/api/live/'), 'since_frame_id=' + encodeURIComponent(latestFrameId || 0)))
             .then(function (response) { return response.json(); })
             .then(function (data) {
                 if (!data || data.error) {
@@ -623,7 +643,7 @@
         currentHours = hours;
         setActiveButton(hours);
 
-        fetch('/patient/api/status/?hours=' + hours)
+        fetch(appendQuery(getApiUrl('statusApi', '/patient/api/status/'), 'hours=' + hours))
             .then(function (response) { return response.json(); })
             .then(function (data) {
                 // Heatmap

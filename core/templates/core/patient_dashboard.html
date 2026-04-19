@@ -14,7 +14,14 @@
   {% endfor %}
 {% endif %}
 
-<div class="patient-layout">
+<div
+    id="patientDashboardApp"
+    class="patient-layout"
+    data-status-api="{% url 'patient_status_api' %}"
+    data-live-api="{% url 'patient_live_heatmap_api' %}"
+    data-frame-detail-api-template="{% url 'patient_frame_detail_api' 0 %}"
+    data-comments-api="{% url 'patient_comments_api' %}"
+    data-annotation-api="{% url 'save_heatmap_annotation' %}">
     <div class="col-left card">
         <h3>Live Heatmap</h3>
         <p id="liveStatus" class="live-status connecting">Live stream connecting</p>
