@@ -35,6 +35,128 @@
         }
     }
 
+    function normaliseLocalMatrix(matrix) {
+        if (!Array.isArray(matrix)) {
+            return null;
+        }
+
+        if (matrix.length === 32) {
+            var rows = [];
+            for (var r = 0; r < 32; r++) {
+                if (!Array.isArray(matrix[r]) || matrix[r].length < 32) {
+                    return null;
+                }
+                var row = [];
+                for (var c = 0; c < 32; c++) {
+                    var v = Number(matrix[r][c]);
+                    if (!isFinite(v)) {
+                        v = 0;
+                    }
+                    if (v < 0) v = 0;
+                    if (v > 4095) v = 4095;
+                    row.push(v);
+                }
+                rows.push(row);
+            }
+            return rows;
+        }
+
+        if (matrix.length === 1024) {
+            var reshaped = [];
+            for (var rowIndex = 0; rowIndex < 32; rowIndex++) {
+                var rowOut = [];
+                for (var colIndex = 0; colIndex < 32; colIndex++) {
+                    var val = Number(matrix[(rowIndex * 32) + colIndex]);
+                    if (!isFinite(val)) {
+                        val = 0;
+                    }
+                    if (val < 0) val = 0;
+                    if (val > 4095) val = 4095;
+                    rowOut.push(val);
+                }
+                reshaped.push(rowOut);
+            }
+            return reshaped;
+        }
+
+        return null;
+    }
+
+    function drawHeatmapFallback(canvas, matrix) {
+        var normalised = normaliseLocalMatrix(matrix);
+        if (!canvas || !normalised) {
+            return;
+        }
+
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        var cellW = canvas.width / 32;
+        var cellH = canvas.height / 32;
+
+        for (var r = 0; r < 32; r++) {
+            for (var c = 0; c < 32; c++) {
+                var norm = normalised[r][c] / 4095;
+                ctx.fillStyle = 'rgba(' + Math.floor(255 * norm) + ',0,' + Math.floor(255 * (1 - norm)) + ',1)';
+                ctx.fillRect(Math.floor(c * cellW), Math.floor(r * cellH), Math.ceil(cellW), Math.ceil(cellH));
+            }
+        }
+    }
+
+    function drawAnnotationFallback(canvas, cells) {
+        if (!canvas || !Array.isArray(cells)) {
+            return;
+        }
+
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (!cells.length) {
+            return;
+        }
+
+        var cellW = canvas.width / 32;
+        var cellH = canvas.height / 32;
+        ctx.fillStyle = 'rgba(220, 53, 69, 0.5)';
+
+        cells.forEach(function (cell) {
+            if (!Array.isArray(cell) || cell.length < 2) {
+                return;
+            }
+            var row = Number(cell[0]);
+            var col = Number(cell[1]);
+            if (!isFinite(row) || !isFinite(col)) {
+                return;
+            }
+            if (row < 0 || row > 31 || col < 0 || col > 31) {
+                return;
+            }
+            ctx.fillRect(Math.floor(col * cellW), Math.floor(row * cellH), Math.ceil(cellW), Math.ceil(cellH));
+        });
+    }
+
+    function safeDrawHeatmap(canvas, matrix) {
+        if (typeof drawHeatmapOnCanvas === 'function') {
+            drawHeatmapOnCanvas(canvas, matrix);
+            return;
+        }
+        drawHeatmapFallback(canvas, matrix);
+    }
+
+    function safeDrawAnnotation(canvas, cells) {
+        if (typeof drawAnnotationOnCanvas === 'function') {
+            drawAnnotationOnCanvas(canvas, cells);
+            return;
+        }
+        drawAnnotationFallback(canvas, cells);
+    }
+
     function formatDateTime(iso) {
         if (!iso) {
             return 'n/a';
@@ -101,13 +223,13 @@
         var annotationInfo = document.getElementById('clinicianAnnotationInfo');
 
         if (heatmapCanvas && latest && Array.isArray(latest.matrix)) {
-            drawHeatmapOnCanvas(heatmapCanvas, latest.matrix);
+            safeDrawHeatmap(heatmapCanvas, latest.matrix);
         } else {
             clearCanvas(heatmapCanvas);
         }
 
         if (annotationCanvas) {
-            drawAnnotationOnCanvas(annotationCanvas, (annotation && Array.isArray(annotation.cells)) ? annotation.cells : []);
+            safeDrawAnnotation(annotationCanvas, (annotation && Array.isArray(annotation.cells)) ? annotation.cells : []);
         }
 
         if (annotationInfo) {
