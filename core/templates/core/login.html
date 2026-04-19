@@ -1,0 +1,65 @@
+{% extends 'core/base.html' %}
+{% block title %}Sign In - Sensore{% endblock %}
+
+{% block content %}
+<div class="login-wrapper">
+    <div class="login-container">
+        <div class="login-header">
+            <h1>Sensore</h1>
+            <p>Sign in to your account</p>
+        </div>
+        
+        {% if form.non_field_errors %}
+            <div class="alert alert-error">
+                <strong>Login Error</strong>
+                {% for error in form.non_field_errors %}
+                    <p>{{ error }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        <form method="post" class="login-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="id_username">Username</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <span class="error-inline">{{ form.username.errors.0 }}</span>
+                {% endif %}
+            </div>
+            
+            <div class="form-group">
+                <label for="id_password">Password</label>
+                {{ form.password }}
+                {% if form.password.errors %}
+                    <span class="error-inline">{{ form.password.errors.0 }}</span>
+                {% endif %}
+            </div>
+            
+            <button type="submit">Sign In</button>
+        </form>
+        
+        <div class="demo-credentials">
+            <p>Demo Accounts:</p>
+            <table>
+                <tr>
+                    <td>Admin</td>
+                    <td><code>admin</code></td>
+                    <td><code>admin123</code></td>
+                </tr>
+                <tr>
+                    <td>Clinician</td>
+                    <td><code>clinician1</code></td>
+                    <td><code>clinician123</code></td>
+                </tr>
+                <tr>
+                    <td>Patient</td>
+                    <td><code>patient1</code></td>
+                    <td><code>patient123</code></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

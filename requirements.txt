@@ -1,0 +1,9 @@
+Django>=4.2
+psycopg2-binary
+djangorestframework
+pandas
+numpy
+scipy
+reportlab
+djangorestframework-simplejwt
+django-filter

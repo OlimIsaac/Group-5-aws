@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+{% block title %}Clinician Dashboard — Sensore{% endblock %}
+{% block nav_clin %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .patient-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+  .patient-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
+    transition: border-color 0.18s, transform 0.18s;
+    cursor: pointer; text-decoration: none; color: inherit;
+  }
+  .patient-card:hover {
+    border-color: rgba(0,212,200,0.35);
+    transform: translateY(-2px);
+  }
+  .patient-card.has-alerts { border-color: rgba(239,68,68,0.35); }
+  .patient-name { font-size: 1rem; font-weight: 600; color: var(--white); }
+  .patient-id   { font-size: 0.72rem; font-family: var(--font-mono); color: var(--mist); }
+  .patient-meta {
+    display: flex; gap: 0.75rem; flex-wrap: wrap;
+    font-size: 0.8rem; color: var(--fog);
+  }
+  .patient-meta span { display: flex; align-items: center; gap: 4px; }
+  .alert-count {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(239,68,68,0.12); color: var(--red);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 20px; font-size: 0.72rem; padding: 2px 9px;
+    font-family: var(--font-mono);
+  }
+  .patient-actions {
+    display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: auto; padding-top: 0.25rem;
+  }
+
+  /* PATIENT DETAIL PANEL */
+  .detail-panel {
+    display: none;
+    background: var(--card-bg);
+    border: 1px solid rgba(0,212,200,0.15);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .detail-panel.open { display: block; }
+
+  /* ALERT TABLE */
+  .alert-table { width: 100%; border-collapse: collapse; }
+  .alert-table th {
+    text-align: left; font-size: 0.72rem; font-family: var(--font-mono);
+    color: var(--mist); text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .alert-table td {
+    padding: 9px 12px; font-size: 0.85rem; color: var(--pale);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .alert-table tr:last-child td { border: none; }
+
+  /* MINI HEATMAP */
+  .mini-heatmap { image-rendering: pixelated; border-radius: 6px; display: block; }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat-block {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--radius-sm); padding: 0.9rem 1.1rem;
+    text-align: center;
+  }
+  .stat-num { font-size: 1.8rem; font-family: var(--font-mono); font-weight: 700; color: var(--teal); }
+  .stat-lbl { font-size: 0.72rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap">
+
+  <div class="page-header flex items-center justify-between">
+    <div>
+      <h1>Clinician Dashboard</h1>
+      <p>Patient pressure risk overview · Sensore Platform</p>
+    </div>
+  </div>
+
+  <!-- SUMMARY STATS -->
+  <div class="stats-row">
+    <div class="stat-block">
+      <div class="stat-num">{{ patient_summaries|length }}</div>
+      <div class="stat-lbl">Patients</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-num" id="totalAlerts">
+        {{ all_alerts|length }}
+      </div>
+      <div class="stat-lbl">Active Alerts</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-num text-danger" id="highRiskCount">—</div>
+      <div class="stat-lbl">High Risk Now</div>
+    </div>
+    <div class="stat-block">
+      <div class="stat-num text-success" id="lowRiskCount">—</div>
+      <div class="stat-lbl">Low Risk</div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="gap:1.25rem; align-items:start">
+
+    <!-- PATIENT CARDS -->
+    <div>
+      <div class="card-title mb-1" style="font-size:0.78rem;color:var(--teal);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">My Patients</div>
+      <div class="patient-grid">
+        {% for ps in patient_summaries %}
+        <div class="patient-card {% if ps.unack_alerts > 0 %}has-alerts{% endif %}" onclick="openPatientDetail({{ ps.user.id }}, '{{ ps.user.get_full_name|default:ps.user.username }}')">
+          <div>
+            <div class="patient-name">{{ ps.user.get_full_name|default:ps.user.username }}</div>
+            <div class="patient-id">
+              {{ ps.user.profile.patient_id|default:'' }}
+              {{ ps.user.username }}
+            </div>
+          </div>
+          <div class="patient-meta">
+            {% if ps.latest_session %}
+              <span>📅 Last session: {{ ps.latest_session.session_date }}</span>
+            {% else %}
+              <span>No sessions yet</span>
+            {% endif %}
+            {% if ps.unack_alerts > 0 %}
+              <span class="alert-count">⚠ {{ ps.unack_alerts }} alert{{ ps.unack_alerts|pluralize }}</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="risk-badge {{ ps.latest_risk }}">{{ ps.latest_risk|capfirst }} Risk</span>
+            <span class="text-muted" style="font-size:0.8rem">View →</span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-muted" style="grid-column:1/-1;text-align:center;padding:2rem;font-size:0.9rem">
+          No patients assigned to your account yet.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ACTIVE ALERTS PANEL -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Active Alerts</span>
+          <span class="mono" style="font-size:0.75rem;color:var(--mist)">{{ all_alerts|length }} unacknowledged</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          {% if all_alerts %}
+          <table class="alert-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Alert</th>
+                <th>Risk</th>
+                <th>Time</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alert in all_alerts %}
+              <tr id="alert-row-{{ alert.id }}">
+                <td style="font-weight:600">{{ alert.session.patient.get_full_name|default:alert.session.patient.username }}</td>
+                <td style="color:var(--fog);font-size:0.8rem;max-width:200px">{{ alert.message|truncatechars:60 }}</td>
+                <td><span class="risk-badge {% if alert.risk_score >= 75 %}critical{% elif alert.risk_score >= 50 %}high{% else %}moderate{% endif %}" style="font-size:0.65rem">{{ alert.risk_score|floatformat:0 }}</span></td>
+                <td style="font-size:0.75rem;color:var(--mist);white-space:nowrap">{{ alert.created_at|date:"d M, H:i" }}</td>
+                <td>
+                  <button class="btn btn-sm btn-secondary" onclick="ackAlert({{ alert.id }})">✓</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div style="text-align:center;padding:2rem;color:var(--mist);font-size:0.875rem">
+            ✅ No active alerts
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PATIENT DETAIL PANEL -->
+  <div class="detail-panel" id="patientDetailPanel">
+    <div class="flex items-center justify-between mb-2">
+      <h2 id="detailPatientName" style="font-size:1.1rem;color:var(--teal)"></h2>
+      <button class="btn btn-secondary btn-sm" onclick="closeDetail()">Close ×</button>
+    </div>
+    <div id="detailContent">
+      <div class="text-muted" style="text-align:center;padding:2rem">Loading patient data…</div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+let detailChart = null;
+
+// Compute risk counts from badge classes
+window.addEventListener('load', () => {
+  const badges = document.querySelectorAll('.patient-card .risk-badge');
+  let high = 0, low = 0;
+  badges.forEach(b => {
+    if (b.classList.contains('high') || b.classList.contains('critical')) high++;
+    if (b.classList.contains('low')) low++;
+  });
+  document.getElementById('highRiskCount').textContent = high;
+  document.getElementById('lowRiskCount').textContent = low;
+});
+
+async function ackAlert(id) {
+  await fetch(`/api/alert/${id}/acknowledge/`, { method:'POST', headers:{'X-CSRFToken':CSRF} });
+  document.getElementById(`alert-row-${id}`)?.remove();
+}
+
+async function openPatientDetail(patientId, name) {
+  const panel = document.getElementById('patientDetailPanel');
+  document.getElementById('detailPatientName').textContent = name;
+  document.getElementById('detailContent').innerHTML = '<div class="text-muted" style="text-align:center;padding:2rem">Loading…</div>';
+  panel.classList.add('open');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Fetch sessions
+  const resp = await fetch(`/api/patient/${patientId}/sessions/`);
+  const data = await resp.json();
+  const sessions = data.sessions || [];
+
+  if (!sessions.length) {
+    document.getElementById('detailContent').innerHTML = '<div class="text-muted" style="padding:1rem">No session data available for this patient.</div>';
+    return;
+  }
+
+  // Build session table + report link
+  const rows = sessions.map(s => `
+    <tr>
+      <td class="mono" style="font-size:0.8rem">${s.date}</td>
+      <td>${s.frame_count} frames</td>
+      <td>${s.flagged ? '<span style="color:var(--amber)">⚑ Flagged</span>' : '<span style="color:var(--green)">Clear</span>'}</td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="loadSessionDetail(${s.id})">View Heatmap</button>
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="grid-2" style="gap:1rem; margin-bottom:1rem">
+      <div>
+        <div class="card-title mb-1" style="font-size:0.75rem;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">Sessions</div>
+        <table class="alert-table" style="width:100%">
+          <thead><tr><th>Date</th><th>Frames</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div>
+        <div class="card-title mb-1" style="font-size:0.75rem;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">Latest Heatmap</div>
+        <div id="detailHeatmapWrap" style="text-align:center">
+          <p style="color:var(--mist);font-size:0.85rem">Click "View Heatmap" to load</p>
+        </div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <div class="card-title mb-1" style="font-size:0.75rem;color:var(--teal);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">Patient Notes &amp; Replies</div>
+      <div id="clinicianComments" style="color:var(--mist);font-size:0.85rem;padding:0.5rem 0">Select a session to view notes.</div>
+    </div>
+    <div class="flex gap-1 mt-1">
+      <a href="/report/${patientId}/" class="btn btn-secondary btn-sm" target="_blank">📄 View Full Report</a>
+      <a href="/report/${patientId}/?download=1" class="btn btn-primary btn-sm">⬇ Download PDF</a>
+    </div>
+  `;
+
+  // Auto-load first session.
+  // Use requestAnimationFrame to ensure the innerHTML assignment above has
+  // been painted to the DOM before we try getElementById('detailHeatmapWrap').
+  if (sessions.length) requestAnimationFrame(() => loadSessionDetail(sessions[0].id));
+}
+
+async function loadSessionDetail(sessionId) {
+  const wrap = document.getElementById('detailHeatmapWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<p style="color:var(--mist);font-size:0.85rem">Loading heatmap…</p>';
+
+  const [frameResp, commentsResp] = await Promise.all([
+    fetch(`/api/session/${sessionId}/latest/`),
+    fetch(`/api/session/${sessionId}/comments/`)
+  ]);
+  const frame = await frameResp.json();
+  const commentsData = await commentsResp.json();
+
+  // Draw heatmap
+  if (!frame.data) {
+    wrap.innerHTML = '<p style="color:var(--mist)">No frame data</p>';
+  } else {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32; canvas.height = 32;
+    canvas.className = 'mini-heatmap';
+    canvas.style.cssText = 'width:200px;height:200px;display:block;margin:0 auto';
+
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(32, 32);
+    const flat = frame.data.flat ? frame.data.flat() : frame.data;
+    for (let i = 0; i < 1024; i++) {
+      const [r, g, b] = pressureToColour(flat[i]);
+      imgData.data[i*4]=r; imgData.data[i*4+1]=g; imgData.data[i*4+2]=b; imgData.data[i*4+3]=255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    const m = frame.metrics;
+    wrap.innerHTML = '';
+    wrap.appendChild(canvas);
+    if (m) {
+      // IMPORTANT: use insertAdjacentHTML — NOT innerHTML +=
+      // innerHTML += destroys the canvas pixel data by re-serialising
+      // the DOM to HTML (canvas contents are not part of the HTML string).
+      wrap.insertAdjacentHTML('beforeend', `
+        <div style="margin-top:0.75rem;display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div class="metric-block"><div class="metric-label">PPI</div><div class="metric-value" style="font-size:1.1rem">${m.ppi?.toFixed(0)}</div></div>
+          <div class="metric-block"><div class="metric-label">Risk</div><div class="metric-value ${m.risk_level}" style="font-size:1.1rem">${m.risk_score?.toFixed(0)}</div></div>
+          <div class="metric-block"><div class="metric-label">Contact Area</div><div class="metric-value" style="font-size:1.1rem">${m.contact_area?.toFixed(1)}%</div></div>
+          <div class="metric-block"><div class="metric-label">Asymmetry</div><div class="metric-value" style="font-size:1.1rem">${m.asymmetry?.toFixed(1)}%</div></div>
+        </div>
+        <div style="margin-top:0.75rem">
+          <button class="btn btn-sm btn-secondary" onclick="flagSession(${sessionId}, this)">⚑ Toggle Flag</button>
+        </div>
+      `);
+    }
+  }
+
+  // Render comments with reply boxes
+  const comments = commentsData.comments || [];
+  const commentsWrap = document.getElementById('clinicianComments');
+  if (!commentsWrap) return;
+
+  if (!comments.length) {
+    commentsWrap.innerHTML = '<div style="color:var(--mist);font-size:0.85rem">No patient notes for this session.</div>';
+    return;
+  }
+
+  commentsWrap.innerHTML = comments.map(c => `
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.6rem">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <strong style="color:${c.author_type==='clinician'?'var(--amber)':'var(--teal)'};font-size:0.82rem">
+          ${escHtml(c.author)} <span style="font-weight:400;opacity:0.7">(${c.author_type})</span>
+        </strong>
+        <span style="font-size:0.7rem;color:var(--mist);font-family:var(--font-mono)">
+          ${new Date(c.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+        </span>
+      </div>
+      <div style="font-size:0.875rem;color:var(--pale);margin-bottom:6px">${escHtml(c.text)}</div>
+      <div style="font-size:0.7rem;color:var(--mist)">📍 ${new Date(c.timestamp).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'})}</div>
+      ${c.replies?.length ? `
+        <div style="margin-top:8px;padding-left:1rem;border-left:2px solid rgba(245,158,11,0.3)">
+          ${c.replies.map(r => `
+            <div style="font-size:0.82rem;color:var(--fog);padding:3px 0">
+              <span style="color:var(--amber);font-weight:600;font-size:0.78rem">${escHtml(r.author)}</span>
+              ${escHtml(r.text)}
+              <span style="font-size:0.68rem;color:var(--mist);margin-left:6px">${new Date(r.created_at).toLocaleString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center" id="reply-form-${c.id}">
+        <input type="text" placeholder="Reply as clinician…"
+               style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:5px 10px;color:var(--white);font-size:0.82rem;font-family:var(--font-main)"
+               id="reply-input-${c.id}" />
+        <button class="btn btn-sm btn-primary" onclick="submitReply(${c.id})">Reply</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function flagSession(sessionId, btn) {
+  const resp = await fetch(`/api/session/${sessionId}/flag/`, {
+    method: 'POST', headers: {'X-CSRFToken': CSRF}
+  });
+  const data = await resp.json();
+  btn.textContent = data.flagged ? '⚑ Flagged ✓' : '⚑ Toggle Flag';
+  btn.style.color = data.flagged ? 'var(--amber)' : '';
+}
+
+async function submitReply(commentId) {
+  const input = document.getElementById(`reply-input-${commentId}`);
+  const text = input?.value.trim();
+  if (!text) return;
+
+  const resp = await fetch(`/api/comment/${commentId}/reply/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({text}),
+  });
+  if (resp.ok) {
+    input.value = '';
+    // Append reply optimistically
+    const data = await resp.json();
+    const form = document.getElementById(`reply-form-${commentId}`);
+    const replyEl = document.createElement('div');
+    replyEl.style.cssText = 'font-size:0.82rem;color:var(--fog);padding:3px 1rem 0;border-left:2px solid rgba(245,158,11,0.3);margin-top:4px';
+    replyEl.innerHTML = `<span style="color:var(--amber);font-weight:600;font-size:0.78rem">${escHtml(data.author)}</span> ${escHtml(data.text)}`;
+    form.parentNode.insertBefore(replyEl, form);
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function closeDetail() {
+  document.getElementById('patientDetailPanel').classList.remove('open');
+}
+
+function pressureToColour(val) {
+  const v = Math.max(1, Math.min(4095, val));
+  const t = (v - 1) / 4094;
+  const stops = [[10,22,40],[0,48,143],[0,200,255],[255,215,0],[255,40,0]];
+  const seg = t * (stops.length - 1);
+  const i = Math.min(Math.floor(seg), stops.length - 2);
+  const f = seg - i;
+  const a = stops[i], b = stops[i+1];
+  return [Math.round(a[0]+(b[0]-a[0])*f), Math.round(a[1]+(b[1]-a[1])*f), Math.round(a[2]+(b[2]-a[2])*f)];
+}
+</script>
+{% endblock %}

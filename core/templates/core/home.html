@@ -1,0 +1,30 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Home - Sensore{% endblock %}
+
+{% block content %}
+<div style="text-align: center; padding: 50px;">
+    <h1>Sensore</h1>
+    <p>Pressure Ulcer Prevention System</p>
+    
+    {% if user.is_authenticated %}
+        <p>Welcome, {{ user.first_name|default:user.username }}!</p>
+        <p>You are logged in as: <strong>{{ user.get_role_display }}</strong></p>
+        {% if user.role == user.ROLE_ADMIN %}
+            <div class="home-admin-panel">
+                <p><a href="{% url 'admin_dashboard' %}" class="btn-admin">Open Admin Dashboard</a></p>
+                <div class="quick-link-grid">
+                    <a href="{% url 'user_list' %}" class="btn-secondary">Users</a>
+                    <a href="{% url 'clinician_list' %}" class="btn-secondary">Clinicians</a>
+                    <a href="{% url 'patient_list' %}" class="btn-secondary">Patients</a>
+                    <a href="{% url 'assignment_list' %}" class="btn-secondary">Assignments</a>
+                    <a href="{% url 'pressure_data_list' %}" class="btn-secondary">Pressure Data</a>
+                    <a href="{% url 'comment_list' %}" class="btn-secondary">Comments</a>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <p><a href="{% url 'login' %}" class="btn-admin">Go to Login</a></p>
+    {% endif %}
+</div>
+{% endblock %}

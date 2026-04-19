@@ -1,0 +1,94 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% block title %}Clinician Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Clinician Dashboard</h2>
+    <p>Manage your assigned patients</p>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">
+    <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>Assigned Patients</h3>
+    {% if patients_data %}
+        <div class="clinician-patient-grid">
+            {% for pd in patients_data %}
+            <div class="clinician-patient-card card">
+                <h4>{{ pd.assignment.patient.user.first_name|default:pd.assignment.patient.user.username }}</h4>
+                <p class="text-secondary" style="font-size:0.85rem;margin-bottom:0.5rem;">{{ pd.assignment.patient.user.email }}</p>
+
+                <div class="heatmap-wrapper heatmap-sm" data-patient-id="{{ pd.assignment.patient.id }}">
+                    <canvas class="patient-heatmap" width="192" height="192"
+                            data-matrix="{{ pd.matrix_json }}"
+                            data-cells="{{ pd.cells_json }}"></canvas>
+                    <canvas class="patient-annotation" width="192" height="192"></canvas>
+                </div>
+
+                {% if pd.latest_annotation %}
+                    <p class="annotation-note">
+                        <strong>Pain marks:</strong> {{ pd.latest_annotation.cells|length }} cell{{ pd.latest_annotation.cells|length|pluralize }}
+                        &mdash; reported {{ pd.latest_annotation.timestamp|date:"N j, H:i" }}
+                    </p>
+                    {% if pd.latest_annotation.note %}
+                        <p class="annotation-note-text">&ldquo;{{ pd.latest_annotation.note }}&rdquo;</p>
+                    {% endif %}
+                {% else %}
+                    <p class="annotation-note text-secondary">No pain marks reported yet</p>
+                {% endif %}
+
+                {% if not pd.latest_frame %}
+                    <p class="text-secondary" style="font-size:0.8rem;">No pressure data available</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No patients assigned yet.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>Flagged Events</h3>
+    <div id="flaggedEvents">No flagged events</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/heatmap.js' %}"></script>
+<script src="{% static 'js/clinician_dashboard.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.clinician-patient-card').forEach(function (card) {
+        var heatmapCanvas = card.querySelector('.patient-heatmap');
+        var annotCanvas = card.querySelector('.patient-annotation');
+        if (!heatmapCanvas) return;
+
+        var matrix = null;
+        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) { console.error('Error parsing matrix', e); }
+        var cells = [];
+        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) { console.error('Error parsing cells', e); }
+
+        if (matrix && Array.isArray(matrix)) {
+            try {
+                drawHeatmapOnCanvas(heatmapCanvas, matrix);
+            } catch (e) {
+                console.error('Error drawing heatmap', e);
+            }
+        }
+        if (cells && cells.length > 0) {
+            try {
+                drawAnnotationOnCanvas(annotCanvas, cells);
+            } catch (e) {
+                console.error('Error drawing annotation', e);
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
