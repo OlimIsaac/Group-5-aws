@@ -7,6 +7,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import login, logout, authenticate
 from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
+from django.utils import timezone as dj_timezone
 
 from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
 from .utils import LOW_PRESSURE_THRESHOLD, HIGH_PRESSURE_THRESHOLD
@@ -180,15 +181,48 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
         except ClinicianProfile.DoesNotExist:
             assignments = []
 
+        start_of_day = dj_timezone.localtime(dj_timezone.now()).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
         patients_data = []
         for assignment in assignments:
             patient_user = assignment.patient.user
             latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
             latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
+            if latest_frame and latest_frame.timestamp >= start_of_day:
+                today_frame = latest_frame
+            else:
+                today_frame = PressureFrame.objects.filter(
+                    user=patient_user, timestamp__gte=start_of_day
+                ).order_by('-timestamp').first()
+            previous_frame = PressureFrame.objects.filter(
+                user=patient_user, timestamp__lt=start_of_day
+            ).order_by('-timestamp').first()
+
+            ppi_delta = None
+            contact_delta = None
+            if today_frame and previous_frame:
+                if (today_frame.peak_pressure_index is not None and
+                        previous_frame.peak_pressure_index is not None):
+                    ppi_delta = (
+                        today_frame.peak_pressure_index -
+                        previous_frame.peak_pressure_index
+                    )
+                if (today_frame.contact_area_percentage is not None and
+                        previous_frame.contact_area_percentage is not None):
+                    contact_delta = (
+                        today_frame.contact_area_percentage -
+                        previous_frame.contact_area_percentage
+                    )
             patients_data.append({
                 'assignment': assignment,
                 'latest_frame': latest_frame,
                 'latest_annotation': latest_annotation,
+                'today_frame': today_frame,
+                'previous_frame': previous_frame,
+                'ppi_delta': ppi_delta,
+                'contact_delta': contact_delta,
                 'matrix_json': json.dumps(latest_frame.raw_matrix) if latest_frame else 'null',
                 'cells_json': json.dumps(latest_annotation.cells) if latest_annotation else '[]',
             })
@@ -221,7 +255,7 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
             patient_comments = (
                 Comment.objects.filter(user__in=patient_users)
                 .select_related('user', 'pressure_frame')
-                .order_by('-timestamp')[:20]
+                .order_by('-timestamp')
             )
 
         return render(request, 'core/clinician_dashboard.html', {

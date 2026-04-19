@@ -44,6 +44,55 @@
                     <p class="annotation-note text-secondary">No pain marks reported yet</p>
                 {% endif %}
 
+                <div style="margin-top:0.6rem;">
+                    <p class="text-secondary" style="font-size:0.8rem;margin:0 0 0.35rem;">Today vs Previous</p>
+                    <p class="text-secondary" style="font-size:0.75rem;margin:0 0 0.35rem;">Uses server local time for "today".</p>
+                    {% if pd.today_frame %}
+                        <p class="text-secondary" style="font-size:0.8rem;margin:0;">
+                            PPI today:
+                            {% if pd.today_frame.peak_pressure_index is not None %}
+                                {{ pd.today_frame.peak_pressure_index|floatformat:1 }}
+                            {% else %}
+                                --
+                            {% endif %}
+                            {% if pd.previous_frame %}
+                                (prev:
+                                {% if pd.previous_frame.peak_pressure_index is not None %}
+                                    {{ pd.previous_frame.peak_pressure_index|floatformat:1 }}
+                                {% else %}
+                                    --
+                                {% endif %}
+                                {% if pd.ppi_delta is not None %}, Δ {{ pd.ppi_delta|floatformat:1 }}{% endif %}
+                                )
+                            {% else %}
+                                (prev: --)
+                            {% endif %}
+                        </p>
+                        <p class="text-secondary" style="font-size:0.8rem;margin:0;">
+                            Contact today:
+                            {% if pd.today_frame.contact_area_percentage is not None %}
+                                {{ pd.today_frame.contact_area_percentage|floatformat:1 }}%
+                            {% else %}
+                                --
+                            {% endif %}
+                            {% if pd.previous_frame %}
+                                (prev:
+                                {% if pd.previous_frame.contact_area_percentage is not None %}
+                                    {{ pd.previous_frame.contact_area_percentage|floatformat:1 }}%
+                                {% else %}
+                                    --
+                                {% endif %}
+                                {% if pd.contact_delta is not None %}, Δ {{ pd.contact_delta|floatformat:1 }}%{% endif %}
+                                )
+                            {% else %}
+                                (prev: --)
+                            {% endif %}
+                        </p>
+                    {% else %}
+                        <p class="text-secondary" style="font-size:0.8rem;margin:0;">No data today to compare.</p>
+                    {% endif %}
+                </div>
+
                 {% if not pd.latest_frame %}
                     <p class="text-secondary" style="font-size:0.8rem;">No pressure data available</p>
                 {% endif %}
@@ -197,8 +246,8 @@
 
 <div class="card">
     <div class="d-flex justify-content-between align-items-center">
-        <h3>Patient Comments</h3>
-        <span style="font-size:0.85rem;color:#666;">{{ patient_comments|length }} recent</span>
+        <h3>All Patient Comments</h3>
+        <span style="font-size:0.85rem;color:#666;">{{ patient_comments|length }} total</span>
     </div>
     {% if patient_comments %}
         <div class="table-container" style="margin-top:1rem;">
