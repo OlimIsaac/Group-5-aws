@@ -25,6 +25,30 @@
                 <h4>{{ pd.assignment.patient.user.first_name|default:pd.assignment.patient.user.username }}</h4>
                 <p class="text-secondary" style="font-size:0.85rem;margin-bottom:0.5rem;">{{ pd.assignment.patient.user.email }}</p>
 
+                <details class="profile-toggle">
+                    <summary>
+                        <span class="profile-chip">
+                            <span class="profile-icon profile-icon-user" aria-hidden="true"></span>
+                            View profile
+                        </span>
+                        <span class="profile-sub">Assigned {{ pd.assignment.assigned_at|date:"N j, Y" }}</span>
+                    </summary>
+                    <div class="profile-grid">
+                        <div class="profile-item">
+                            <span class="profile-icon profile-icon-id" aria-hidden="true"></span>
+                            <span>Username: {{ pd.assignment.patient.user.username }}</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-icon profile-icon-mail" aria-hidden="true"></span>
+                            <span>Email: {{ pd.assignment.patient.user.email|default:"-" }}</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-icon profile-icon-date" aria-hidden="true"></span>
+                            <span>Assigned: {{ pd.assignment.assigned_at|date:"N j, Y" }}</span>
+                        </div>
+                    </div>
+                </details>
+
                 <div class="heatmap-wrapper heatmap-sm">
                     <canvas class="patient-heatmap" width="192" height="192"
                             data-matrix="{{ pd.matrix_json }}"
@@ -458,6 +482,62 @@
 .status-dot-warn {
     background: #f59e0b;
 }
+.profile-toggle {
+    margin: 0.5rem 0 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.5rem 0.65rem;
+    background: #f8fafc;
+}
+.profile-toggle summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+}
+.profile-toggle summary::-webkit-details-marker {
+    display: none;
+}
+.profile-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 700;
+    font-size: 0.78rem;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.profile-sub {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+.profile-grid {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+.profile-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: #1f2937;
+}
+.profile-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid rgba(15, 23, 42, 0.15);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+.profile-icon-user { background: linear-gradient(135deg, #93c5fd, #2563eb); }
+.profile-icon-id { background: linear-gradient(135deg, #c4b5fd, #7c3aed); }
+.profile-icon-mail { background: linear-gradient(135deg, #5eead4, #0f766e); }
+.profile-icon-date { background: linear-gradient(135deg, #fcd34d, #f59e0b); }
 .compare-icon {
     font-size: 0.8rem;
     line-height: 1;

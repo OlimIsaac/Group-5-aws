@@ -173,6 +173,63 @@
     align-items: center;
     gap: 0.4rem;
   }
+  .profile-panel {
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.45);
+  }
+  .profile-panel summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .profile-panel summary::-webkit-details-marker { display: none; }
+  .profile-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mist);
+  }
+  .profile-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 4px;
+    display: inline-block;
+    background: linear-gradient(135deg, #22d3ee, #3b82f6);
+  }
+  .profile-sub {
+    font-size: 0.72rem;
+    color: var(--fog);
+  }
+  .profile-grid {
+    display: grid;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--pale);
+  }
+  .profile-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .profile-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .profile-icon-user { background: linear-gradient(135deg, #60a5fa, #2563eb); }
+  .profile-icon-id { background: linear-gradient(135deg, #c4b5fd, #7c3aed); }
+  .profile-icon-date { background: linear-gradient(135deg, #fcd34d, #f59e0b); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 {% endblock %}
@@ -238,6 +295,17 @@
             <span class="risk-badge {{ ps.latest_risk }}">{{ ps.latest_risk|capfirst }} Risk</span>
             <span class="text-muted" style="font-size:0.8rem">View →</span>
           </div>
+          <details class="profile-panel" onclick="event.stopPropagation()">
+            <summary>
+              <span class="profile-title"><span class="profile-dot"></span>Patient profile</span>
+              <span class="profile-sub">Click to expand</span>
+            </summary>
+            <div class="profile-grid">
+              <div class="profile-item"><span class="profile-icon profile-icon-user"></span>{{ ps.user.get_full_name|default:ps.user.username }}</div>
+              <div class="profile-item"><span class="profile-icon profile-icon-id"></span>Username: {{ ps.user.username }}</div>
+              <div class="profile-item"><span class="profile-icon profile-icon-date"></span>Last session: {% if ps.latest_session %}{{ ps.latest_session.session_date }}{% else %}--{% endif %}</div>
+            </div>
+          </details>
           <div class="compare-panel">
             <div class="compare-title"><span class="dot"></span> Today vs Previous</div>
             {% if ps.latest_metrics %}
