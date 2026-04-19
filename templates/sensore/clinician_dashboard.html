@@ -158,6 +158,21 @@
   }
   .stat-num { font-size: 1.8rem; font-family: var(--font-mono); font-weight: 700; color: var(--teal); }
   .stat-lbl { font-size: 0.72rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+  }
+  .status-dot-muted { background: #94a3b8; }
+  .status-dot-warn { background: #f59e0b; }
+  .status-dot-ok { background: #22c55e; }
+  .empty-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 {% endblock %}
@@ -213,7 +228,7 @@
             {% if ps.latest_session %}
               <span>📅 Last session: {{ ps.latest_session.session_date }}</span>
             {% else %}
-              <span>No sessions yet</span>
+              <span class="empty-inline"><span class="status-dot status-dot-muted"></span>No sessions yet</span>
             {% endif %}
             {% if ps.unack_alerts > 0 %}
               <span class="alert-count">⚠ {{ ps.unack_alerts }} alert{{ ps.unack_alerts|pluralize }}</span>
@@ -268,13 +283,13 @@
               </div>
               <div class="compare-note">Based on latest two sessions.</div>
             {% else %}
-              <div class="compare-note">No session metrics to compare.</div>
+              <div class="compare-note empty-inline"><span class="status-dot status-dot-muted"></span>No session metrics to compare.</div>
             {% endif %}
           </div>
         </div>
         {% empty %}
         <div class="text-muted" style="grid-column:1/-1;text-align:center;padding:2rem;font-size:0.9rem">
-          No patients assigned to your account yet.
+          <span class="empty-inline"><span class="status-dot status-dot-muted"></span>No patients assigned to your account yet.</span>
         </div>
         {% endfor %}
       </div>

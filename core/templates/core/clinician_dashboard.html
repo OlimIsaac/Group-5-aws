@@ -41,7 +41,10 @@
                         <p class="annotation-note-text">&ldquo;{{ pd.latest_annotation.note }}&rdquo;</p>
                     {% endif %}
                 {% else %}
-                    <p class="annotation-note text-secondary">No pain marks reported yet</p>
+                    <p class="annotation-note text-secondary empty-note">
+                        <span class="status-dot status-dot-muted"></span>
+                        No pain marks reported yet
+                    </p>
                 {% endif %}
 
                 <div style="margin-top:0.6rem;">
@@ -117,12 +120,18 @@
                             </div>
                         </div>
                     {% else %}
-                        <p class="text-secondary" style="font-size:0.8rem;margin:0;">No data today to compare.</p>
+                        <p class="text-secondary empty-note" style="font-size:0.8rem;margin:0;">
+                            <span class="status-dot status-dot-muted"></span>
+                            No data today to compare.
+                        </p>
                     {% endif %}
                 </div>
 
                 {% if not pd.latest_frame %}
-                    <p class="text-secondary" style="font-size:0.8rem;">No pressure data available</p>
+                    <p class="text-secondary empty-note" style="font-size:0.8rem;">
+                        <span class="status-dot status-dot-warn"></span>
+                        No pressure data available
+                    </p>
                 {% endif %}
             </div>
             {% endfor %}
@@ -430,6 +439,24 @@
     font-weight: 700;
     min-width: 78px;
     justify-content: center;
+}
+.empty-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+}
+.status-dot-muted {
+    background: #94a3b8;
+}
+.status-dot-warn {
+    background: #f59e0b;
 }
 .compare-icon {
     font-size: 0.8rem;
