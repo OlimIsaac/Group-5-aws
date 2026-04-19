@@ -3,10 +3,148 @@
 
     var currentHours = 1;
     var pressureChart = null;
+    var latestFrameId = 0;
+    var currentHeatmapMatrix = null;
+    var heatmapAnimationId = null;
+    var liveRequestInFlight = false;
+
+    var LIVE_POLL_MS = 1500;
+    var DASHBOARD_REFRESH_MS = 15000;
+    var COMMENTS_REFRESH_MS = 30000;
+    var HEATMAP_TRANSITION_MS = 450;
 
     function getCsrfToken() {
         var csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
         return csrfMatch ? csrfMatch[1] : '';
+    }
+
+    function isNumber(value) {
+        return typeof value === 'number' && isFinite(value);
+    }
+
+    function isValidMatrix(matrix) {
+        if (!Array.isArray(matrix) || matrix.length !== 32) {
+            return false;
+        }
+
+        for (var r = 0; r < 32; r++) {
+            if (!Array.isArray(matrix[r]) || matrix[r].length !== 32) {
+                return false;
+            }
+            for (var c = 0; c < 32; c++) {
+                if (!isNumber(matrix[r][c])) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    function cloneMatrix(matrix) {
+        return matrix.map(function (row) { return row.slice(); });
+    }
+
+    function mixMatrices(startMatrix, endMatrix, progress) {
+        var mixed = [];
+        for (var r = 0; r < 32; r++) {
+            var row = [];
+            for (var c = 0; c < 32; c++) {
+                var startVal = startMatrix[r][c];
+                var endVal = endMatrix[r][c];
+                row.push(startVal + (endVal - startVal) * progress);
+            }
+            mixed.push(row);
+        }
+        return mixed;
+    }
+
+    function animateHeatmapTo(nextMatrix) {
+        if (!isValidMatrix(nextMatrix)) {
+            return;
+        }
+
+        var targetMatrix = cloneMatrix(nextMatrix);
+
+        if (!currentHeatmapMatrix) {
+            currentHeatmapMatrix = targetMatrix;
+            drawHeatmap('heatmapCanvas', currentHeatmapMatrix);
+            return;
+        }
+
+        if (heatmapAnimationId !== null && typeof window.cancelAnimationFrame === 'function') {
+            window.cancelAnimationFrame(heatmapAnimationId);
+            heatmapAnimationId = null;
+        }
+
+        if (typeof window.requestAnimationFrame !== 'function') {
+            currentHeatmapMatrix = targetMatrix;
+            drawHeatmap('heatmapCanvas', currentHeatmapMatrix);
+            return;
+        }
+
+        var startMatrix = currentHeatmapMatrix;
+        var startTime = null;
+
+        function step(timestamp) {
+            if (startTime === null) {
+                startTime = timestamp;
+            }
+
+            var progress = Math.min((timestamp - startTime) / HEATMAP_TRANSITION_MS, 1);
+            var blended = mixMatrices(startMatrix, targetMatrix, progress);
+            drawHeatmap('heatmapCanvas', blended);
+
+            if (progress < 1) {
+                heatmapAnimationId = window.requestAnimationFrame(step);
+                return;
+            }
+
+            currentHeatmapMatrix = targetMatrix;
+            heatmapAnimationId = null;
+        }
+
+        heatmapAnimationId = window.requestAnimationFrame(step);
+    }
+
+    function setLiveStatus(message, state) {
+        var statusEl = document.getElementById('liveStatus');
+        if (!statusEl) {
+            return;
+        }
+
+        statusEl.textContent = message;
+        statusEl.className = 'live-status' + (state ? ' ' + state : '');
+    }
+
+    function updateLiveStatus(frameTimestamp, serverTimestamp, isNew) {
+        if (!frameTimestamp) {
+            setLiveStatus('Live stream waiting for new pressure data', 'stale');
+            return;
+        }
+
+        var frameMs = Date.parse(frameTimestamp);
+        var serverMs = Date.parse(serverTimestamp || '');
+        var nowMs = isFinite(serverMs) ? serverMs : Date.now();
+
+        if (!isFinite(frameMs)) {
+            setLiveStatus('Live stream connected', 'live');
+            return;
+        }
+
+        var ageSeconds = Math.max(0, Math.round((nowMs - frameMs) / 1000));
+
+        if (ageSeconds <= 4) {
+            setLiveStatus(isNew ? 'Live stream updated just now' : 'Live stream active (' + ageSeconds + 's delay)', 'live');
+            return;
+        }
+
+        if (ageSeconds <= 15) {
+            setLiveStatus('Live stream slow (' + ageSeconds + 's old)', 'stale');
+            return;
+        }
+
+        setLiveStatus('Live stream stale (' + ageSeconds + 's old)', 'error');
     }
 
     function escapeHtml(value) {
@@ -311,9 +449,83 @@
         });
     }
 
+    function applyLiveMetrics(data) {
+        var ppiEl = document.getElementById('ppiValue');
+        var contactEl = document.getElementById('contactValue');
+
+        if (ppiEl) {
+            ppiEl.textContent = data.latest_ppi !== null && data.latest_ppi !== undefined
+                ? parseFloat(data.latest_ppi).toFixed(1)
+                : '--';
+        }
+
+        if (contactEl) {
+            contactEl.textContent = data.latest_contact !== null && data.latest_contact !== undefined
+                ? parseFloat(data.latest_contact).toFixed(1) + '%'
+                : '--';
+        }
+
+        var explanationEl = document.getElementById('simpleExplanation');
+        if (explanationEl) {
+            explanationEl.textContent = data.explanation || 'No pressure frame available yet. Upload data to start analysis.';
+        }
+
+        var banner = document.getElementById('alertBanner');
+        if (banner) {
+            if (data.alert) {
+                banner.className = 'alert alert-danger';
+                banner.textContent = 'High pressure detected. Please shift position.';
+            } else {
+                banner.className = 'alert alert-success';
+                banner.textContent = 'Pressure looks normal.';
+            }
+        }
+    }
+
+    function pollLiveHeatmap() {
+        if (liveRequestInFlight) {
+            return;
+        }
+
+        liveRequestInFlight = true;
+
+        fetch('/patient/api/live/?since_frame_id=' + encodeURIComponent(latestFrameId || 0))
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                if (!data || data.error) {
+                    setLiveStatus('Live stream reconnecting', 'error');
+                    return;
+                }
+
+                if (!data.has_data) {
+                    setLiveStatus('Live stream waiting for new pressure data', 'stale');
+                    return;
+                }
+
+                if (data.frame_id) {
+                    latestFrameId = data.frame_id;
+                }
+
+                if (data.latest_matrix && isValidMatrix(data.latest_matrix)) {
+                    animateHeatmapTo(data.latest_matrix);
+                }
+
+                applyLiveMetrics(data);
+                updateLiveStatus(data.frame_timestamp, data.server_time, !!data.is_new);
+            })
+            .catch(function () {
+                setLiveStatus('Live stream reconnecting', 'error');
+            })
+            .finally(function () {
+                liveRequestInFlight = false;
+            });
+    }
+
     // ---------- Data loading ----------
 
-    function loadData(hours) {
+    function loadData(hours, options) {
+        options = options || {};
+
         currentHours = hours;
         setActiveButton(hours);
 
@@ -321,8 +533,8 @@
             .then(function (response) { return response.json(); })
             .then(function (data) {
                 // Heatmap
-                if (data.latest_matrix !== null && Array.isArray(data.latest_matrix)) {
-                    drawHeatmap('heatmapCanvas', data.latest_matrix);
+                if (isValidMatrix(data.latest_matrix)) {
+                    animateHeatmapTo(data.latest_matrix);
                 }
 
                 // Redraw annotation overlay on top (preserves unsaved marks)
@@ -337,32 +549,15 @@
                     refreshAnnotationCanvas();
                 }
 
-                // Metrics
-                var ppiEl = document.getElementById('ppiValue');
-                var contactEl = document.getElementById('contactValue');
-                ppiEl.textContent = data.latest_ppi !== null
-                    ? parseFloat(data.latest_ppi).toFixed(1)
-                    : '--';
-                contactEl.textContent = data.latest_contact !== null
-                    ? parseFloat(data.latest_contact).toFixed(1) + '%'
-                    : '--';
-
-                var explanationEl = document.getElementById('simpleExplanation');
-                if (explanationEl) {
-                    explanationEl.textContent = data.explanation || 'No pressure frame available yet. Upload data to start analysis.';
+                if (data.latest_frame_id) {
+                    latestFrameId = data.latest_frame_id;
                 }
+
+                updateLiveStatus(data.latest_timestamp, data.server_time, true);
+
+                applyLiveMetrics(data);
 
                 populateFrameSelector(data.recent_frames || []);
-
-                // Alert banner
-                var banner = document.getElementById('alertBanner');
-                if (data.alert) {
-                    banner.className = 'alert alert-danger';
-                    banner.textContent = '⚠ High pressure detected — please shift position';
-                } else {
-                    banner.className = 'alert alert-success';
-                    banner.textContent = '✓ Pressure looks normal';
-                }
 
                 // Chart
                 if (data.chart_data && Array.isArray(data.chart_data.labels)) {
@@ -371,28 +566,43 @@
                     pressureChart.update();
                 }
 
-                loadComments();
+                if (options.includeComments !== false) {
+                    loadComments();
+                }
             })
             .catch(function () {
-                // Silent fail — leave existing UI unchanged, keep polling
+                setLiveStatus('Live stream reconnecting', 'error');
             });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
         initChart();
         initAnnotation();
+        setLiveStatus('Live stream connecting', 'connecting');
 
         var saveCommentBtn = document.getElementById('saveCommentBtn');
         if (saveCommentBtn) {
             saveCommentBtn.addEventListener('click', saveTimeLinkedComment);
         }
 
-        loadData(1);
-        setInterval(function () { loadData(currentHours); }, 8000);
+        loadData(1, { includeComments: true });
+        pollLiveHeatmap();
+
+        setInterval(function () {
+            pollLiveHeatmap();
+        }, LIVE_POLL_MS);
+
+        setInterval(function () {
+            loadData(currentHours, { includeComments: false });
+        }, DASHBOARD_REFRESH_MS);
+
+        setInterval(function () {
+            loadComments();
+        }, COMMENTS_REFRESH_MS);
 
         document.querySelectorAll('.time-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                loadData(parseInt(btn.dataset.hours));
+                loadData(parseInt(btn.dataset.hours, 10), { includeComments: true });
             });
         });
     });

@@ -309,6 +309,9 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
 
         data = {
             'alert': alert,
+            'latest_frame_id': latest_frame.id if latest_frame else None,
+            'latest_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
+            'server_time': now.isoformat(),
             'latest_ppi': latest_ppi,
             'latest_contact': latest_contact,
             'latest_matrix': latest_matrix,
@@ -325,6 +328,60 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
         }
 
         return JsonResponse(data)
+
+
+class PatientLiveHeatmapAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        try:
+            since_frame_id = int(request.GET.get('since_frame_id', 0))
+            if since_frame_id < 0:
+                since_frame_id = 0
+        except (TypeError, ValueError):
+            since_frame_id = 0
+
+        latest_frame = PressureFrame.objects.filter(user=request.user).order_by('-timestamp').first()
+        server_time = timezone.now()
+
+        if not latest_frame:
+            return JsonResponse({
+                'has_data': False,
+                'is_new': False,
+                'server_time': server_time.isoformat(),
+            })
+
+        latest_metrics = _ensure_frame_metrics(latest_frame)
+        if not latest_metrics:
+            return JsonResponse({
+                'has_data': False,
+                'is_new': False,
+                'server_time': server_time.isoformat(),
+            })
+
+        is_new = latest_frame.id != since_frame_id
+
+        payload = {
+            'has_data': True,
+            'is_new': is_new,
+            'frame_id': latest_frame.id,
+            'frame_timestamp': latest_frame.timestamp.isoformat(),
+            'server_time': server_time.isoformat(),
+            'alert': latest_metrics['high_pressure_flag'],
+            'latest_ppi': latest_metrics['peak_pressure_index'],
+            'latest_contact': latest_metrics['contact_area_percentage'],
+            'latest_risk_score': latest_metrics['risk_score'],
+            'latest_risk_level': latest_metrics['risk_level'],
+            'explanation': _build_patient_explanation(latest_metrics),
+        }
+
+        if is_new or since_frame_id == 0:
+            payload['latest_matrix'] = latest_metrics['matrix']
+
+        return JsonResponse(payload)
 
 
 class SaveHeatmapAnnotationView(LoginRequiredMixin, View):
