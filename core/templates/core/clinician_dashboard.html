@@ -250,37 +250,34 @@
         <span style="font-size:0.85rem;color:#666;">{{ patient_comments|length }} total</span>
     </div>
     {% if patient_comments %}
-        <div class="table-container" style="margin-top:1rem;">
-            <table class="management-table" style="min-width:0;">
-                <thead>
-                    <tr>
-                        <th>Patient</th>
-                        <th>Time</th>
-                        <th>Comment</th>
-                        <th>Reply</th>
-                        <th>Frame</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for comment in patient_comments %}
-                    <tr>
-                        <td>{{ comment.user.first_name|default:comment.user.username }}</td>
-                        <td>{{ comment.timestamp|date:"N j, H:i" }}</td>
-                        <td style="max-width:220px;">
-                            {{ comment.text|truncatewords:18 }}
-                        </td>
-                        <td style="min-width:220px;">
-                            <form method="post" action="{% url 'reply_comment' comment.id %}">
-                                {% csrf_token %}
-                                <textarea name="clinician_reply" rows="2" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;">{{ comment.clinician_reply|default:'' }}</textarea>
-                                <button type="submit" class="btn-secondary" style="margin-top:0.5rem;">Save Reply</button>
-                            </form>
-                        </td>
-                        <td>#{{ comment.pressure_frame.id }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="comment-grid" style="margin-top:1rem;">
+            {% for comment in patient_comments %}
+            <div class="comment-card">
+                <div class="comment-card-header">
+                    <div class="comment-meta">
+                        <span class="comment-patient">{{ comment.user.first_name|default:comment.user.username }}</span>
+                        <span class="comment-time">{{ comment.timestamp|date:"N j, H:i" }}</span>
+                    </div>
+                    <div class="comment-badges">
+                        {% if comment.clinician_reply %}
+                            <span class="comment-status replied">Replied</span>
+                        {% else %}
+                            <span class="comment-status pending">Needs reply</span>
+                        {% endif %}
+                        <span class="comment-frame">Frame #{{ comment.pressure_frame.id }}</span>
+                    </div>
+                </div>
+                <p class="comment-text-full">{{ comment.text|linebreaksbr }}</p>
+                <div class="comment-reply">
+                    <form method="post" action="{% url 'reply_comment' comment.id %}">
+                        {% csrf_token %}
+                        <label class="comment-reply-label" for="reply-{{ comment.id }}">Clinician reply</label>
+                        <textarea id="reply-{{ comment.id }}" name="clinician_reply" rows="3">{{ comment.clinician_reply|default:'' }}</textarea>
+                        <button type="submit" class="btn-secondary">Save Reply</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
         </div>
     {% else %}
         <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No comments from assigned patients.</p>
@@ -339,6 +336,94 @@
 }
 .alert-filter-btn:hover {
     background: #e2e8f0;
+}
+.comment-grid {
+    display: grid;
+    gap: 1rem;
+}
+.comment-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    background: #fbfdff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.comment-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+.comment-meta {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.comment-patient {
+    font-weight: 700;
+    color: #0f172a;
+}
+.comment-time {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+.comment-badges {
+    display: inline-flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.comment-status {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.comment-status.replied {
+    background: #dcfce7;
+    color: #166534;
+}
+.comment-status.pending {
+    background: #fee2e2;
+    color: #991b1b;
+}
+.comment-frame {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 600;
+}
+.comment-text-full {
+    color: #1f2937;
+    line-height: 1.5;
+    margin: 0 0 0.75rem;
+}
+.comment-reply {
+    border-top: 1px dashed #cbd5f5;
+    padding-top: 0.75rem;
+}
+.comment-reply-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.4rem;
+}
+.comment-reply textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #cbd5f5;
+    border-radius: 8px;
+    resize: vertical;
+}
+.comment-reply .btn-secondary {
+    margin-top: 0.5rem;
 }
 </style>
 <script src="{% static 'js/heatmap.js' %}"></script>
