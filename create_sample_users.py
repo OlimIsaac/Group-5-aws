@@ -5,6 +5,8 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'sensore.settings')
 django.setup()
 
+# Minor comment for git verification.
+
 from core.models import User, PatientProfile, ClinicianProfile, Assignment
 
 # Create sample clinician
