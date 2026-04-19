@@ -87,7 +87,8 @@ confirm_import_delete() {
   echo
   echo "About to delete all core.User rows (cascade) before import."
   read -r -p "Continue? [y/N]: " reply
-  if [[ "${reply,,}" != "y" ]]; then
+  reply_normalized="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$reply_normalized" != "y" ]]; then
     echo "Aborted by user."
     exit 1
   fi
