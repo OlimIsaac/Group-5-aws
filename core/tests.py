@@ -3,7 +3,8 @@ import unittest
 
 try:
     from .forms import PainZoneReportForm
-    from .models import PREDEFINED_ZONES, PainZoneReport, PressureFrame, SensorData
+    from .models import (PREDEFINED_ZONES, PainZoneReport, PressureFrame,
+                         SensorData)
 except Exception as exc:  # pragma: no cover - legacy compatibility only
     raise unittest.SkipTest(f"Legacy core tests skipped: {exc}")
 
@@ -323,3 +324,22 @@ class PatientDashboardViewTest(TestCase):
     def test_dashboard_context_has_no_frames_key(self):
         response = self.client.get('/patient/')
         self.assertNotIn('frames', response.context)
+
+    def test_dashboard_context_has_initial_recent_frames_key(self):
+        response = self.client.get('/patient/')
+        self.assertIn('initial_recent_frames', response.context)
+
+    def test_dashboard_backfills_initial_recent_frames_from_sensor_data(self):
+        SensorData.objects.create(
+            user=self.patient,
+            timestamp=timezone.now() - timedelta(minutes=15),
+            pressure_value=1725.0,
+            sensor_id='SENSOR_DASH',
+            location='seat-mat',
+        )
+
+        self.assertEqual(PressureFrame.objects.filter(user=self.patient).count(), 0)
+        response = self.client.get('/patient/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(len(response.context['initial_recent_frames']), 0)

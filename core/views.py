@@ -189,8 +189,12 @@ def _ensure_pressure_frames_for_user(user, max_rows=500):
 
     frame_rows = []
     for sensor_row in sensor_rows:
-        matrix = _build_matrix_from_pressure(sensor_row.pressure_value)
-        metrics = _calculate_frame_metrics(matrix)
+        try:
+            matrix = _build_matrix_from_pressure(sensor_row.pressure_value)
+            metrics = _calculate_frame_metrics(matrix)
+        except Exception:
+            continue
+
         frame_rows.append(
             PressureFrame(
                 user=user,
@@ -202,7 +206,8 @@ def _ensure_pressure_frames_for_user(user, max_rows=500):
             )
         )
 
-    PressureFrame.objects.bulk_create(frame_rows, batch_size=300)
+    if frame_rows:
+        PressureFrame.objects.bulk_create(frame_rows, batch_size=300)
     return len(frame_rows)
 
 
@@ -229,6 +234,17 @@ class PatientDashboardView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_PATIENT:
             return redirect('home')
 
+        _ensure_pressure_frames_for_user(request.user)
+        initial_recent_frames = list(
+            reversed(
+                list(
+                    PressureFrame.objects
+                    .filter(user=request.user)
+                    .order_by('-timestamp')[:200]
+                )
+            )
+        )
+
         pain_zones = PainZoneReport.objects.filter(user=request.user).order_by('-timestamp').first()
         annotations = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp')[:5]
         latest_pain_report = PainZoneReport.objects.filter(user=request.user).order_by('-timestamp').first()
@@ -240,6 +256,7 @@ class PatientDashboardView(LoginRequiredMixin, View):
             'pain_zones': pain_zones,
             'annotations': annotations,
             'latest_pain_report': latest_pain_report,
+            'initial_recent_frames': initial_recent_frames,
         }
         return render(request, 'core/patient_dashboard.html', context)
 
@@ -278,105 +295,145 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_PATIENT:
             return JsonResponse({'error': 'Unauthorized'}, status=403)
 
-        _ensure_pressure_frames_for_user(request.user)
-
         try:
-            hours = int(request.GET.get('hours', 1))
-            if hours not in [1, 6, 24]:
+            _ensure_pressure_frames_for_user(request.user)
+
+            try:
+                hours = int(request.GET.get('hours', 1))
+                if hours not in [1, 6, 24]:
+                    hours = 1
+            except ValueError:
                 hours = 1
-        except ValueError:
-            hours = 1
 
-        all_frames_qs = PressureFrame.objects.filter(user=request.user)
-        latest_frame = all_frames_qs.order_by('-timestamp').first()
-        latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp').first()
+            all_frames_qs = PressureFrame.objects.filter(user=request.user)
+            latest_frame = all_frames_qs.order_by('-timestamp').first()
+            latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp').first()
 
-        latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
+            latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
 
-        alert = latest_metrics['high_pressure_flag'] if latest_metrics else False
-        latest_ppi = latest_metrics['peak_pressure_index'] if latest_metrics else None
-        latest_contact = latest_metrics['contact_area_percentage'] if latest_metrics else None
-        latest_matrix = latest_metrics['matrix'] if latest_metrics else None
-        saved_annotation = latest_annotation.cells if latest_annotation else []
+            alert = latest_metrics['high_pressure_flag'] if latest_metrics else False
+            latest_ppi = latest_metrics['peak_pressure_index'] if latest_metrics else None
+            latest_contact = latest_metrics['contact_area_percentage'] if latest_metrics else None
+            latest_matrix = latest_metrics['matrix'] if latest_metrics else None
+            saved_annotation = latest_annotation.cells if latest_annotation else []
 
-        now = timezone.now()
-        cutoff = now - timedelta(hours=hours)
+            now = timezone.now()
+            cutoff = now - timedelta(hours=hours)
 
-        chart_frames_qs = all_frames_qs.filter(timestamp__gte=cutoff).order_by('timestamp')
-        chart_window_end = now
-        using_fallback_window = False
+            chart_frames_qs = all_frames_qs.filter(timestamp__gte=cutoff).order_by('timestamp')
+            chart_window_end = now
+            using_fallback_window = False
 
-        if not chart_frames_qs.exists() and latest_frame:
-            # If there are no very recent frames, anchor the selected window to the latest
-            # available frame so the chart is still meaningful for patient logins.
-            using_fallback_window = True
-            chart_window_end = latest_frame.timestamp
-            fallback_start = chart_window_end - timedelta(hours=hours)
-            chart_frames_qs = all_frames_qs.filter(
-                timestamp__gte=fallback_start,
-                timestamp__lte=chart_window_end,
-            ).order_by('timestamp')
+            if not chart_frames_qs.exists() and latest_frame:
+                # If there are no very recent frames, anchor the selected window to the latest
+                # available frame so the chart is still meaningful for patient logins.
+                using_fallback_window = True
+                chart_window_end = latest_frame.timestamp
+                fallback_start = chart_window_end - timedelta(hours=hours)
+                chart_frames_qs = all_frames_qs.filter(
+                    timestamp__gte=fallback_start,
+                    timestamp__lte=chart_window_end,
+                ).order_by('timestamp')
 
-        enriched_chart_frames = []
-        high_pressure_count = 0
-        for frame in chart_frames_qs:
-            metrics = _ensure_frame_metrics(frame)
-            if not metrics:
-                continue
-            enriched_chart_frames.append((frame, metrics))
-            if metrics['high_pressure_flag']:
-                high_pressure_count += 1
-
-        if enriched_chart_frames:
-            num_buckets = hours + 1
-            labels = [f"Hour {i}" for i in range(num_buckets)]
-            counts = [0] * num_buckets
-            total_counts = [0] * num_buckets
-
-            for frame, metrics in enriched_chart_frames:
-                elapsed = chart_window_end - frame.timestamp
-                bucket_idx = min(max(int(elapsed.total_seconds() // 3600), 0), num_buckets - 1)
-                total_counts[bucket_idx] += 1
+            enriched_chart_frames = []
+            high_pressure_count = 0
+            for frame in chart_frames_qs:
+                metrics = _ensure_frame_metrics(frame)
+                if not metrics:
+                    continue
+                enriched_chart_frames.append((frame, metrics))
                 if metrics['high_pressure_flag']:
-                    counts[bucket_idx] += 1
-        else:
-            labels = []
-            counts = []
-            total_counts = []
+                    high_pressure_count += 1
 
-        selector_frames = list(all_frames_qs.order_by('-timestamp')[:200])
-        recent_frames = [
-            {
-                'id': frame.id,
-                'timestamp': frame.timestamp.isoformat(),
-                'label': frame.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            if enriched_chart_frames:
+                num_buckets = hours + 1
+                labels = [f"Hour {i}" for i in range(num_buckets)]
+                counts = [0] * num_buckets
+                total_counts = [0] * num_buckets
+
+                for frame, metrics in enriched_chart_frames:
+                    elapsed = chart_window_end - frame.timestamp
+                    bucket_idx = min(max(int(elapsed.total_seconds() // 3600), 0), num_buckets - 1)
+                    total_counts[bucket_idx] += 1
+                    if metrics['high_pressure_flag']:
+                        counts[bucket_idx] += 1
+            else:
+                labels = []
+                counts = []
+                total_counts = []
+
+            selector_frames = list(all_frames_qs.order_by('-timestamp')[:200])
+            recent_frames = [
+                {
+                    'id': frame.id,
+                    'timestamp': frame.timestamp.isoformat(),
+                    'label': frame.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                }
+                for frame in reversed(selector_frames)
+            ]
+
+            data = {
+                'alert': alert,
+                'latest_frame_id': latest_frame.id if latest_frame else None,
+                'latest_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
+                'server_time': now.isoformat(),
+                'latest_ppi': latest_ppi,
+                'latest_contact': latest_contact,
+                'latest_matrix': latest_matrix,
+                'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
+                'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,
+                'explanation': _build_patient_explanation(latest_metrics) if latest_metrics else 'No pressure frame available yet. Upload data to start analysis.',
+                'saved_annotation': saved_annotation,
+                'recent_frames': recent_frames,
+                'chart_data': {
+                    'labels': labels,
+                    'counts': counts,
+                    'total_counts': total_counts,
+                    'high_pressure_total': high_pressure_count,
+                    'using_fallback_window': using_fallback_window,
+                }
             }
-            for frame in reversed(selector_frames)
-        ]
 
-        data = {
-            'alert': alert,
-            'latest_frame_id': latest_frame.id if latest_frame else None,
-            'latest_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
-            'server_time': now.isoformat(),
-            'latest_ppi': latest_ppi,
-            'latest_contact': latest_contact,
-            'latest_matrix': latest_matrix,
-            'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
-            'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,
-            'explanation': _build_patient_explanation(latest_metrics) if latest_metrics else 'No pressure frame available yet. Upload data to start analysis.',
-            'saved_annotation': saved_annotation,
-            'recent_frames': recent_frames,
-            'chart_data': {
-                'labels': labels,
-                'counts': counts,
-                'total_counts': total_counts,
-                'high_pressure_total': high_pressure_count,
-                'using_fallback_window': using_fallback_window,
-            }
-        }
+            return JsonResponse(data)
+        except Exception:
+            fallback_now = timezone.now()
+            fallback_frames = list(
+                PressureFrame.objects.filter(user=request.user).order_by('-timestamp')[:200]
+            )
+            fallback_recent_frames = [
+                {
+                    'id': frame.id,
+                    'timestamp': frame.timestamp.isoformat(),
+                    'label': frame.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                }
+                for frame in reversed(fallback_frames)
+            ]
 
-        return JsonResponse(data)
+            latest_frame = fallback_frames[0] if fallback_frames else None
+            latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
+            latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp').first()
+
+            return JsonResponse({
+                'alert': latest_metrics['high_pressure_flag'] if latest_metrics else False,
+                'latest_frame_id': latest_frame.id if latest_frame else None,
+                'latest_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
+                'server_time': fallback_now.isoformat(),
+                'latest_ppi': latest_metrics['peak_pressure_index'] if latest_metrics else None,
+                'latest_contact': latest_metrics['contact_area_percentage'] if latest_metrics else None,
+                'latest_matrix': latest_metrics['matrix'] if latest_metrics else None,
+                'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
+                'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,
+                'explanation': _build_patient_explanation(latest_metrics) if latest_metrics else 'No pressure frame available yet. Upload data to start analysis.',
+                'saved_annotation': latest_annotation.cells if latest_annotation else [],
+                'recent_frames': fallback_recent_frames,
+                'chart_data': {
+                    'labels': [],
+                    'counts': [],
+                    'total_counts': [],
+                    'high_pressure_total': 0,
+                    'using_fallback_window': False,
+                }
+            })
 
 
 class PatientLiveHeatmapAPIView(LoginRequiredMixin, View):
