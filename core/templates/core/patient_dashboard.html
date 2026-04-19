@@ -47,9 +47,9 @@
         <div class="card">
             <h3>Pressure Over Time</h3>
             <div class="time-filters">
-                <button class="btn btn-outline time-btn active" data-hours="1" type="button">Last Hour</button>
+                <button class="btn btn-outline time-btn" data-hours="1" type="button">Last Hour</button>
                 <button class="btn btn-outline time-btn" data-hours="6" type="button">Last 6 Hours</button>
-                <button class="btn btn-outline time-btn" data-hours="24" type="button">Last 24 Hours</button>
+                <button class="btn btn-outline time-btn active" data-hours="24" type="button">Last 24 Hours</button>
             </div>
             <canvas id="pressureChart" height="200"></canvas>
         </div>
@@ -66,6 +66,7 @@
                 <select id="commentFrameSelect" class="form-input">
                     <option value="">No frame available</option>
                 </select>
+                <p id="framePreviewStatus" class="annotation-status">Heatmap follows selected frame record.</p>
                 <label for="commentText">Your note</label>
                 <textarea id="commentText" class="form-input" rows="3" placeholder="Example: shifted left due to discomfort"></textarea>
                 <button id="saveCommentBtn" class="btn btn-primary btn-sm" type="button">Save Time-Linked Comment</button>

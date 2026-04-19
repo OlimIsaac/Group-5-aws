@@ -257,7 +257,8 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
         except ValueError:
             hours = 1
 
-        latest_frame = PressureFrame.objects.filter(user=request.user).order_by('-timestamp').first()
+        all_frames_qs = PressureFrame.objects.filter(user=request.user)
+        latest_frame = all_frames_qs.order_by('-timestamp').first()
         latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).order_by('-timestamp').first()
 
         latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
@@ -271,43 +272,56 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
         now = timezone.now()
         cutoff = now - timedelta(hours=hours)
 
-        frames = PressureFrame.objects.filter(
-            user=request.user,
-            timestamp__gte=cutoff,
-        ).order_by('timestamp')
+        chart_frames_qs = all_frames_qs.filter(timestamp__gte=cutoff).order_by('timestamp')
+        chart_window_end = now
+        using_fallback_window = False
 
-        enriched_frames = []
+        if not chart_frames_qs.exists() and latest_frame:
+            # If there are no very recent frames, anchor the selected window to the latest
+            # available frame so the chart is still meaningful for patient logins.
+            using_fallback_window = True
+            chart_window_end = latest_frame.timestamp
+            fallback_start = chart_window_end - timedelta(hours=hours)
+            chart_frames_qs = all_frames_qs.filter(
+                timestamp__gte=fallback_start,
+                timestamp__lte=chart_window_end,
+            ).order_by('timestamp')
+
+        enriched_chart_frames = []
         high_pressure_count = 0
-        for frame in frames:
+        for frame in chart_frames_qs:
             metrics = _ensure_frame_metrics(frame)
             if not metrics:
                 continue
-            enriched_frames.append((frame, metrics))
+            enriched_chart_frames.append((frame, metrics))
             if metrics['high_pressure_flag']:
                 high_pressure_count += 1
 
-        if enriched_frames:
+        if enriched_chart_frames:
             num_buckets = hours + 1
             labels = [f"Hour {i}" for i in range(num_buckets)]
             counts = [0] * num_buckets
+            total_counts = [0] * num_buckets
 
-            for frame, metrics in enriched_frames:
-                if not metrics['high_pressure_flag']:
-                    continue
-                elapsed = now - frame.timestamp
-                bucket_idx = min(int(elapsed.total_seconds() // 3600), num_buckets - 1)
-                counts[bucket_idx] += 1
+            for frame, metrics in enriched_chart_frames:
+                elapsed = chart_window_end - frame.timestamp
+                bucket_idx = min(max(int(elapsed.total_seconds() // 3600), 0), num_buckets - 1)
+                total_counts[bucket_idx] += 1
+                if metrics['high_pressure_flag']:
+                    counts[bucket_idx] += 1
         else:
             labels = []
             counts = []
+            total_counts = []
 
+        selector_frames = list(all_frames_qs.order_by('-timestamp')[:200])
         recent_frames = [
             {
                 'id': frame.id,
                 'timestamp': frame.timestamp.isoformat(),
                 'label': frame.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             }
-            for frame, _ in enriched_frames[-80:]
+            for frame in reversed(selector_frames)
         ]
 
         data = {
@@ -326,7 +340,9 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
             'chart_data': {
                 'labels': labels,
                 'counts': counts,
+                'total_counts': total_counts,
                 'high_pressure_total': high_pressure_count,
+                'using_fallback_window': using_fallback_window,
             }
         }
 
@@ -387,6 +403,30 @@ class PatientLiveHeatmapAPIView(LoginRequiredMixin, View):
         return JsonResponse(payload)
 
 
+class PatientFrameDetailAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request, frame_id):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        frame = get_object_or_404(PressureFrame, pk=frame_id, user=request.user)
+        payload = _build_clinician_frame_detail_payload(frame)
+        if not payload:
+            return JsonResponse({'error': 'Frame metrics unavailable'}, status=422)
+
+        frame_metrics = {
+            'peak_pressure_index': payload['peak_pressure_index'],
+            'contact_area_percentage': payload['contact_area_percentage'],
+            'risk_score': payload['risk_score'],
+            'risk_level': payload['risk_level'],
+            'high_pressure_flag': payload['high_pressure_flag'],
+        }
+
+        payload['explanation'] = _build_patient_explanation(frame_metrics)
+        return JsonResponse(payload)
+
+
 class SaveHeatmapAnnotationView(LoginRequiredMixin, View):
     login_url = 'login'
 
@@ -417,20 +457,24 @@ class PatientCommentsAPIView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_PATIENT:
             return JsonResponse({'error': 'Unauthorized'}, status=403)
 
-        try:
-            hours = int(request.GET.get('hours', 24))
-            if hours <= 0:
-                hours = 24
-        except ValueError:
-            hours = 24
+        hours_param = (request.GET.get('hours', 'all') or 'all').strip().lower()
 
-        cutoff = timezone.now() - timedelta(hours=hours)
-        comments = (
-            Comment.objects
-            .filter(user=request.user, pressure_frame__user=request.user, timestamp__gte=cutoff)
-            .select_related('pressure_frame')
-            .order_by('-timestamp')[:80]
+        comments_qs = Comment.objects.filter(
+            user=request.user,
+            pressure_frame__user=request.user,
         )
+
+        if hours_param != 'all':
+            try:
+                hours = int(hours_param)
+                if hours <= 0:
+                    hours = 24
+            except ValueError:
+                hours = 24
+            cutoff = timezone.now() - timedelta(hours=hours)
+            comments_qs = comments_qs.filter(timestamp__gte=cutoff)
+
+        comments = comments_qs.select_related('pressure_frame').order_by('-timestamp')[:80]
 
         payload = []
         for comment in comments:

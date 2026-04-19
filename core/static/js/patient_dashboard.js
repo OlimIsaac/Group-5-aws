@@ -1,9 +1,10 @@
 (function () {
     'use strict';
 
-    var currentHours = 1;
+    var currentHours = 24;
     var pressureChart = null;
     var latestFrameId = 0;
+    var pinHistoricalPreview = false;
     var currentHeatmapMatrix = null;
     var heatmapAnimationId = null;
     var liveRequestInFlight = false;
@@ -154,6 +155,74 @@
             .replace(/>/g, '&gt;');
     }
 
+    function getFrameDetailApiUrl(frameId) {
+        return '/patient/api/frames/' + frameId + '/';
+    }
+
+    function getFrameSelectValue() {
+        var select = document.getElementById('commentFrameSelect');
+        if (!select) {
+            return 0;
+        }
+        var value = parseInt(select.value, 10);
+        return isFinite(value) ? value : 0;
+    }
+
+    function setFramePreviewStatus(message, state) {
+        var statusEl = document.getElementById('framePreviewStatus');
+        if (!statusEl) {
+            return;
+        }
+        statusEl.textContent = message;
+        statusEl.className = 'annotation-status' + (state ? ' ' + state : '');
+    }
+
+    function applyFramePreviewData(frameData) {
+        if (!frameData) {
+            return;
+        }
+
+        if (isValidMatrix(frameData.matrix)) {
+            animateHeatmapTo(frameData.matrix);
+        }
+
+        applyLiveMetrics({
+            latest_ppi: frameData.peak_pressure_index,
+            latest_contact: frameData.contact_area_percentage,
+            latest_risk_score: frameData.risk_score,
+            latest_risk_level: frameData.risk_level,
+            alert: frameData.high_pressure_flag,
+            explanation: frameData.explanation,
+        });
+
+        setLiveStatus('Viewing selected frame: ' + new Date(frameData.timestamp).toLocaleString(), 'stale');
+        setFramePreviewStatus('Previewing selected frame from history.', 'saved');
+    }
+
+    function loadSelectedFramePreview(frameId, options) {
+        options = options || {};
+
+        if (!frameId) {
+            return Promise.resolve();
+        }
+
+        return fetch(getFrameDetailApiUrl(frameId))
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load frame detail');
+                }
+                return response.json();
+            })
+            .then(function (data) {
+                applyFramePreviewData(data);
+            })
+            .catch(function () {
+                if (!options.silent) {
+                    setFramePreviewStatus('Could not load selected frame preview.', 'error');
+                }
+            });
+    }
+
     // Annotation state
     var markedCells = {};   // key "r,c" -> true
     var isAnnotating = false;
@@ -166,13 +235,22 @@
             type: 'bar',
             data: {
                 labels: [],
-                datasets: [{
-                    label: 'High-pressure frames',
-                    data: [],
-                    backgroundColor: 'rgba(220, 53, 69, 0.6)',
-                    borderColor: 'rgba(220, 53, 69, 1)',
-                    borderWidth: 1,
-                }]
+                datasets: [
+                    {
+                        label: 'All frames',
+                        data: [],
+                        backgroundColor: 'rgba(13, 110, 253, 0.38)',
+                        borderColor: 'rgba(13, 110, 253, 0.95)',
+                        borderWidth: 1,
+                    },
+                    {
+                        label: 'High-pressure frames',
+                        data: [],
+                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1,
+                    }
+                ]
             },
             options: {
                 responsive: true,
@@ -347,21 +425,31 @@
         var select = document.getElementById('commentFrameSelect');
         if (!select) return;
 
+        var previousValue = select.value;
         select.innerHTML = '';
         if (!frames || frames.length === 0) {
             var empty = document.createElement('option');
             empty.value = '';
             empty.textContent = 'No frame available';
             select.appendChild(empty);
+            setFramePreviewStatus('No frame available for preview.', '');
             return;
         }
 
+        var availableValues = [];
         frames.slice().reverse().forEach(function (frame) {
             var option = document.createElement('option');
             option.value = frame.id;
             option.textContent = frame.label;
             select.appendChild(option);
+            availableValues.push(String(frame.id));
         });
+
+        if (pinHistoricalPreview && previousValue && availableValues.indexOf(previousValue) !== -1) {
+            select.value = previousValue;
+        } else {
+            select.selectedIndex = 0;
+        }
     }
 
     function renderComments(comments) {
@@ -389,7 +477,7 @@
     }
 
     function loadComments() {
-        fetch('/patient/api/comments/?hours=' + currentHours)
+        fetch('/patient/api/comments/?hours=all')
             .then(function (response) { return response.json(); })
             .then(function (data) {
                 renderComments(data.comments || []);
@@ -506,6 +594,12 @@
                     latestFrameId = data.frame_id;
                 }
 
+                var selectedFrameId = getFrameSelectValue();
+                if (pinHistoricalPreview && selectedFrameId && latestFrameId && Number(selectedFrameId) !== Number(latestFrameId)) {
+                    setLiveStatus('Live stream active. Preview is pinned to selected historical frame.', 'stale');
+                    return;
+                }
+
                 if (data.latest_matrix && isValidMatrix(data.latest_matrix)) {
                     animateHeatmapTo(data.latest_matrix);
                 }
@@ -559,10 +653,19 @@
 
                 populateFrameSelector(data.recent_frames || []);
 
+                var selectedFrameId = getFrameSelectValue();
+                if (pinHistoricalPreview && selectedFrameId && data.latest_frame_id && Number(selectedFrameId) !== Number(data.latest_frame_id)) {
+                    loadSelectedFramePreview(selectedFrameId, { silent: true });
+                } else {
+                    pinHistoricalPreview = false;
+                    setFramePreviewStatus('Showing latest live frame.', '');
+                }
+
                 // Chart
                 if (data.chart_data && Array.isArray(data.chart_data.labels)) {
                     pressureChart.data.labels = data.chart_data.labels;
-                    pressureChart.data.datasets[0].data = data.chart_data.counts;
+                    pressureChart.data.datasets[0].data = data.chart_data.total_counts || [];
+                    pressureChart.data.datasets[1].data = data.chart_data.counts || [];
                     pressureChart.update();
                 }
 
@@ -585,7 +688,29 @@
             saveCommentBtn.addEventListener('click', saveTimeLinkedComment);
         }
 
-        loadData(1, { includeComments: true });
+        var frameSelect = document.getElementById('commentFrameSelect');
+        if (frameSelect) {
+            frameSelect.addEventListener('change', function () {
+                var selectedFrameId = getFrameSelectValue();
+                if (!selectedFrameId) {
+                    pinHistoricalPreview = false;
+                    setFramePreviewStatus('No frame selected for preview.', '');
+                    return;
+                }
+
+                if (latestFrameId && Number(selectedFrameId) === Number(latestFrameId)) {
+                    pinHistoricalPreview = false;
+                    setFramePreviewStatus('Showing latest live frame.', '');
+                    loadData(currentHours, { includeComments: false });
+                    return;
+                }
+
+                pinHistoricalPreview = true;
+                loadSelectedFramePreview(selectedFrameId, { silent: false });
+            });
+        }
+
+        loadData(24, { includeComments: true });
         pollLiveHeatmap();
 
         setInterval(function () {

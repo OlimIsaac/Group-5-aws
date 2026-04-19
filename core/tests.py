@@ -104,6 +104,7 @@ class PatientStatusAPITest(TestCase):
         self.assertIn('latest_contact', data)
         self.assertIn('latest_matrix', data)
         self.assertIn('chart_data', data)
+        self.assertIn('total_counts', data['chart_data'])
 
     def test_safe_defaults_with_no_frames(self):
         response = self.client.get('/patient/api/status/?hours=1')
@@ -112,6 +113,7 @@ class PatientStatusAPITest(TestCase):
         self.assertIsNone(data['latest_ppi'])
         self.assertIsNone(data['latest_matrix'])
         self.assertEqual(data['chart_data']['labels'], [])
+        self.assertEqual(data['chart_data']['total_counts'], [])
 
     def test_alert_true_when_latest_frame_is_high(self):
         self._make_frame(minutes_ago=5, high_pressure=True)
@@ -164,6 +166,7 @@ class PatientStatusAPITest(TestCase):
         data = json.loads(response.content)
         self.assertEqual(len(data['chart_data']['labels']), 7)
         self.assertEqual(len(data['chart_data']['counts']), 7)
+        self.assertEqual(len(data['chart_data']['total_counts']), 7)
 
     def test_twenty_four_hour_window_returns_twenty_five_buckets(self):
         self._make_frame(minutes_ago=10)
@@ -171,6 +174,82 @@ class PatientStatusAPITest(TestCase):
         data = json.loads(response.content)
         self.assertEqual(len(data['chart_data']['labels']), 25)
         self.assertEqual(len(data['chart_data']['counts']), 25)
+        self.assertEqual(len(data['chart_data']['total_counts']), 25)
+
+    def test_recent_frames_include_older_records_outside_selected_hours(self):
+        self._make_frame(minutes_ago=5)
+        old_frame = PressureFrame.objects.create(
+            user=self.patient,
+            timestamp=timezone.now() - timedelta(hours=48),
+            raw_matrix=[[0] * 32 for _ in range(32)],
+            peak_pressure_index=700.0,
+            contact_area_percentage=45.0,
+            high_pressure_flag=False,
+        )
+
+        response = self.client.get('/patient/api/status/?hours=1')
+        data = json.loads(response.content)
+        frame_ids = [frame['id'] for frame in data['recent_frames']]
+        self.assertIn(old_frame.id, frame_ids)
+
+    def test_chart_fallback_window_uses_latest_when_recent_window_empty(self):
+        self._make_frame(minutes_ago=60 * 30, high_pressure=False)
+
+        response = self.client.get('/patient/api/status/?hours=1')
+        data = json.loads(response.content)
+
+        self.assertTrue(data['chart_data']['using_fallback_window'])
+        self.assertEqual(sum(data['chart_data']['total_counts']), 1)
+
+
+class PatientFrameDetailAPITest(TestCase):
+    def setUp(self):
+        self.patient = User.objects.create_user(
+            username='framepat', password='pass', role='patient'
+        )
+        self.other_patient = User.objects.create_user(
+            username='framepat2', password='pass', role='patient'
+        )
+        self.admin = User.objects.create_user(
+            username='frameadmin', password='pass', role='admin'
+        )
+
+        self.own_frame = PressureFrame.objects.create(
+            user=self.patient,
+            timestamp=timezone.now() - timedelta(minutes=10),
+            raw_matrix=[[100.0] * 32 for _ in range(32)],
+            peak_pressure_index=900.0,
+            contact_area_percentage=45.0,
+            high_pressure_flag=False,
+        )
+        self.other_frame = PressureFrame.objects.create(
+            user=self.other_patient,
+            timestamp=timezone.now() - timedelta(minutes=5),
+            raw_matrix=[[200.0] * 32 for _ in range(32)],
+            peak_pressure_index=1200.0,
+            contact_area_percentage=48.0,
+            high_pressure_flag=False,
+        )
+
+    def test_patient_can_view_own_frame_detail(self):
+        self.client.login(username='framepat', password='pass')
+        response = self.client.get(f'/patient/api/frames/{self.own_frame.id}/')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual(data['id'], self.own_frame.id)
+        self.assertIn('matrix', data)
+        self.assertIn('peak_pressure_index', data)
+        self.assertIn('explanation', data)
+
+    def test_patient_cannot_view_other_patient_frame_detail(self):
+        self.client.login(username='framepat', password='pass')
+        response = self.client.get(f'/patient/api/frames/{self.other_frame.id}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_non_patient_role_is_forbidden(self):
+        self.client.login(username='frameadmin', password='pass')
+        response = self.client.get(f'/patient/api/frames/{self.own_frame.id}/')
+        self.assertEqual(response.status_code, 403)
 
 
 class SubmitPainZonesViewTest(TestCase):

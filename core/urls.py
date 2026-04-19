@@ -21,6 +21,7 @@ urlpatterns = [
     path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
     path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
     path('patient/api/live/', views.PatientLiveHeatmapAPIView.as_view(), name='patient_live_heatmap_api'),
+    path('patient/api/frames/<int:frame_id>/', views.PatientFrameDetailAPIView.as_view(), name='patient_frame_detail_api'),
     path('patient/api/comments/', views.PatientCommentsAPIView.as_view(), name='patient_comments_api'),
     path('patient/api/heatmap-annotation/', views.SaveHeatmapAnnotationView.as_view(), name='save_heatmap_annotation'),
     path('patient/report/', views.PatientReportView.as_view(), name='patient_report'),
