@@ -477,6 +477,39 @@ class PatientCommentsAPIView(LoginRequiredMixin, View):
         })
 
 
+def _build_report_payload_for_user(user):
+    frames_qs = PressureFrame.objects.filter(user=user).order_by('-timestamp')
+
+    frame_rows = []
+    for frame in frames_qs:
+        metrics = _ensure_frame_metrics(frame)
+        if not metrics:
+            continue
+        frame_rows.append({
+            'frame': frame,
+            'metrics': metrics,
+            'comment_count': frame.comments.count(),
+        })
+
+    total_frames = len(frame_rows)
+    if total_frames:
+        avg_ppi = round(sum(row['metrics']['peak_pressure_index'] for row in frame_rows) / total_frames, 1)
+        avg_contact = round(sum(row['metrics']['contact_area_percentage'] for row in frame_rows) / total_frames, 1)
+        high_events = sum(1 for row in frame_rows if row['metrics']['high_pressure_flag'])
+    else:
+        avg_ppi = 0.0
+        avg_contact = 0.0
+        high_events = 0
+
+    return {
+        'frame_rows': frame_rows,
+        'total_frames': total_frames,
+        'avg_ppi': avg_ppi,
+        'avg_contact': avg_contact,
+        'high_events': high_events,
+    }
+
+
 class PatientReportView(LoginRequiredMixin, View):
     login_url = 'login'
 
@@ -484,35 +517,14 @@ class PatientReportView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_PATIENT:
             return redirect('home')
 
-        frames_qs = PressureFrame.objects.filter(user=request.user).order_by('-timestamp')
-
-        frame_rows = []
-        for frame in frames_qs:
-            metrics = _ensure_frame_metrics(frame)
-            if not metrics:
-                continue
-            frame_rows.append({
-                'frame': frame,
-                'metrics': metrics,
-                'comment_count': frame.comments.count(),
-            })
-
-        total_frames = len(frame_rows)
-        if total_frames:
-            avg_ppi = round(sum(row['metrics']['peak_pressure_index'] for row in frame_rows) / total_frames, 1)
-            avg_contact = round(sum(row['metrics']['contact_area_percentage'] for row in frame_rows) / total_frames, 1)
-            high_events = sum(1 for row in frame_rows if row['metrics']['high_pressure_flag'])
-        else:
-            avg_ppi = 0.0
-            avg_contact = 0.0
-            high_events = 0
+        report_payload = _build_report_payload_for_user(request.user)
 
         if request.GET.get('download') == '1':
             response = HttpResponse(content_type='text/csv')
             response['Content-Disposition'] = 'attachment; filename="patient_medical_history.csv"'
             writer = csv.writer(response)
             writer.writerow(['timestamp', 'peak_pressure_index', 'contact_area_pct', 'risk_score', 'risk_level', 'high_pressure_flag', 'comments'])
-            for row in frame_rows:
+            for row in report_payload['frame_rows']:
                 writer.writerow([
                     row['frame'].timestamp.isoformat(),
                     row['metrics']['peak_pressure_index'],
@@ -525,12 +537,12 @@ class PatientReportView(LoginRequiredMixin, View):
             return response
 
         context = {
-            'frame_rows': frame_rows[:200],
+            'frame_rows': report_payload['frame_rows'][:200],
             'generated_at': timezone.now(),
-            'total_frames': total_frames,
-            'avg_ppi': avg_ppi,
-            'avg_contact': avg_contact,
-            'high_events': high_events,
+            'total_frames': report_payload['total_frames'],
+            'avg_ppi': report_payload['avg_ppi'],
+            'avg_contact': report_payload['avg_contact'],
+            'high_events': report_payload['high_events'],
         }
         return render(request, 'core/patient_report.html', context)
 
@@ -542,36 +554,41 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
         if request.user.role != User.ROLE_CLINICIAN:
             return redirect('home')
         try:
-            assignments = ClinicianPatientAssignment.objects.filter(clinician=request.user).select_related('patient')
+            assignments = (
+                ClinicianPatientAssignment.objects
+                .filter(clinician=request.user)
+                .select_related('patient')
+                .order_by('patient__first_name', 'patient__username')
+            )
 
             patients_data = []
+            high_pressure_total = 0
             for assignment in assignments:
                 patient_user = assignment.patient
                 latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
                 latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
-                latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).order_by('-timestamp').first()
-                matrix_json = 'null'
-                if latest_metrics:
-                    try:
-                        matrix_json = json.dumps(latest_metrics['matrix'])
-                    except (TypeError, ValueError):
-                        matrix_json = 'null'
-                cells_json = '[]'
-                if latest_annotation:
-                    try:
-                        cells_json = json.dumps(latest_annotation.cells)
-                    except (TypeError, ValueError):
-                        cells_json = '[]'
+
+                if latest_metrics and latest_metrics['high_pressure_flag']:
+                    high_pressure_total += 1
+
                 patients_data.append({
-                    'assignment': assignment,
-                    'latest_frame': latest_frame,
-                    'latest_metrics': latest_metrics,
-                    'latest_annotation': latest_annotation,
-                    'matrix_json': matrix_json,
-                    'cells_json': cells_json,
+                    'patient_id': patient_user.id,
+                    'patient_name': patient_user.get_full_name() or patient_user.username,
+                    'patient_email': patient_user.email,
+                    'latest_ppi': latest_metrics['peak_pressure_index'] if latest_metrics else None,
+                    'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
+                    'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,
+                    'high_pressure': latest_metrics['high_pressure_flag'] if latest_metrics else False,
+                    'latest_timestamp': latest_frame.timestamp if latest_frame else None,
+                    'has_data': bool(latest_frame),
                 })
 
-            return render(request, 'core/clinician_dashboard.html', {'patients_data': patients_data})
+            context = {
+                'patients_data': patients_data,
+                'assigned_total': len(patients_data),
+                'high_pressure_total': high_pressure_total,
+            }
+            return render(request, 'core/clinician_dashboard.html', context)
         except Exception as e:
             # Log the error and return a simple error page
             return render(request, 'core/clinician_dashboard.html', {'patients_data': [], 'error': str(e)})
@@ -613,6 +630,7 @@ class ClinicianDashboardDataAPIView(LoginRequiredMixin, View):
                 'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
                 'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,
                 'high_pressure': latest_metrics['high_pressure_flag'] if latest_metrics else False,
+                'latest_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
                 'pressure_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
                 'annotation_cells': annotation_cells,
                 'annotation_note': latest_annotation.note if latest_annotation else '',
@@ -620,6 +638,149 @@ class ClinicianDashboardDataAPIView(LoginRequiredMixin, View):
             })
 
         return JsonResponse({'patients': patients})
+
+
+class ClinicianPatientDetailAPIView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request, patient_id):
+        if request.user.role != User.ROLE_CLINICIAN:
+            return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+        assignment = (
+            ClinicianPatientAssignment.objects
+            .filter(clinician=request.user, patient_id=patient_id)
+            .select_related('patient')
+            .first()
+        )
+        if not assignment:
+            return JsonResponse({'error': 'Patient not assigned to this clinician'}, status=404)
+
+        patient = assignment.patient
+
+        latest_frame = PressureFrame.objects.filter(user=patient).order_by('-timestamp').first()
+        latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
+        latest_annotation = HeatmapAnnotation.objects.filter(user=patient).order_by('-timestamp').first()
+
+        recent_frames_qs = PressureFrame.objects.filter(user=patient).order_by('-timestamp')[:120]
+        recent_frames = []
+        for frame in recent_frames_qs:
+            metrics = _ensure_frame_metrics(frame)
+            if not metrics:
+                continue
+            recent_frames.append({
+                'id': frame.id,
+                'timestamp': frame.timestamp.isoformat(),
+                'label': frame.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'peak_pressure_index': metrics['peak_pressure_index'],
+                'contact_area_percentage': metrics['contact_area_percentage'],
+                'risk_score': metrics['risk_score'],
+                'risk_level': metrics['risk_level'],
+                'high_pressure_flag': metrics['high_pressure_flag'],
+                'comment_count': frame.comments.count(),
+            })
+
+        recent_comments_qs = (
+            Comment.objects
+            .filter(user=patient)
+            .select_related('pressure_frame')
+            .order_by('-timestamp')[:40]
+        )
+        recent_comments = [
+            {
+                'id': comment.id,
+                'text': comment.text,
+                'timestamp': comment.timestamp.isoformat(),
+                'frame_timestamp': comment.pressure_frame.timestamp.isoformat(),
+                'clinician_reply': comment.clinician_reply,
+            }
+            for comment in recent_comments_qs
+        ]
+
+        trend_points = list(reversed(recent_frames[:40]))
+        trend = {
+            'labels': [point['label'][11:] for point in trend_points],
+            'ppi': [point['peak_pressure_index'] for point in trend_points],
+            'risk': [point['risk_score'] for point in trend_points],
+            'contact': [point['contact_area_percentage'] for point in trend_points],
+        }
+
+        payload = {
+            'patient': {
+                'id': patient.id,
+                'name': patient.get_full_name() or patient.username,
+                'email': patient.email,
+            },
+            'report_url': f'/clinician/patient/{patient.id}/report/',
+            'latest': {
+                'timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
+                'matrix': latest_metrics['matrix'] if latest_metrics else None,
+                'peak_pressure_index': latest_metrics['peak_pressure_index'] if latest_metrics else None,
+                'contact_area_percentage': latest_metrics['contact_area_percentage'] if latest_metrics else None,
+                'risk_score': latest_metrics['risk_score'] if latest_metrics else None,
+                'risk_level': latest_metrics['risk_level'] if latest_metrics else None,
+                'high_pressure_flag': latest_metrics['high_pressure_flag'] if latest_metrics else False,
+            },
+            'annotation': {
+                'cells': latest_annotation.cells if latest_annotation else [],
+                'note': latest_annotation.note if latest_annotation else '',
+                'timestamp': latest_annotation.timestamp.isoformat() if latest_annotation else None,
+            },
+            'recent_frames': recent_frames,
+            'recent_comments': recent_comments,
+            'trend': trend,
+        }
+
+        return JsonResponse(payload)
+
+
+class ClinicianPatientReportView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request, patient_id):
+        if request.user.role != User.ROLE_CLINICIAN:
+            return redirect('home')
+
+        assignment = (
+            ClinicianPatientAssignment.objects
+            .filter(clinician=request.user, patient_id=patient_id)
+            .select_related('patient')
+            .first()
+        )
+        if not assignment:
+            return HttpResponseForbidden('You are not assigned to this patient.')
+
+        patient = assignment.patient
+        report_payload = _build_report_payload_for_user(patient)
+
+        if request.GET.get('download') == '1':
+            response = HttpResponse(content_type='text/csv')
+            safe_name = patient.username.replace(' ', '_')
+            response['Content-Disposition'] = f'attachment; filename="{safe_name}_medical_history.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['timestamp', 'peak_pressure_index', 'contact_area_pct', 'risk_score', 'risk_level', 'high_pressure_flag', 'comments'])
+            for row in report_payload['frame_rows']:
+                writer.writerow([
+                    row['frame'].timestamp.isoformat(),
+                    row['metrics']['peak_pressure_index'],
+                    row['metrics']['contact_area_percentage'],
+                    row['metrics']['risk_score'],
+                    row['metrics']['risk_level'],
+                    row['metrics']['high_pressure_flag'],
+                    row['comment_count'],
+                ])
+            return response
+
+        context = {
+            'frame_rows': report_payload['frame_rows'][:300],
+            'generated_at': timezone.now(),
+            'total_frames': report_payload['total_frames'],
+            'avg_ppi': report_payload['avg_ppi'],
+            'avg_contact': report_payload['avg_contact'],
+            'high_events': report_payload['high_events'],
+            'patient': patient,
+        }
+        return render(request, 'core/clinician_patient_report.html', context)
 
 
 class AdminDashboardView(LoginRequiredMixin, View):

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="dashboard-header">
     <h2>Clinician Dashboard</h2>
-    <p>Manage your assigned patients</p>
+    <p>Review assigned patients with full pressure history, comments, and reports.</p>
 </div>
 
 {% if error %}
@@ -14,87 +14,161 @@
 </div>
 {% endif %}
 
-<div class="card">
-    <h3>Assigned Patients</h3>
-    {% if patients_data %}
-        <div class="clinician-patient-grid">
+{% if patients_data %}
+<div class="admin-grid report-summary-grid clinician-summary-grid">
+    <div class="metric-card">
+        <h4>Assigned Patients</h4>
+        <p class="metric-value">{{ assigned_total }}</p>
+    </div>
+    <div class="metric-card">
+        <h4>High Pressure Now</h4>
+        <p class="metric-value">{{ high_pressure_total }}</p>
+    </div>
+    <div class="metric-card">
+        <h4>Quick Action</h4>
+        <p class="metric-value">Select a patient to open full details</p>
+    </div>
+</div>
+
+<div class="card clinician-workspace">
+    <aside class="clinician-sidebar">
+        <h3>Assigned Patients</h3>
+        <div id="clinicianPatientList" class="clinician-patient-list">
             {% for pd in patients_data %}
-            <div class="clinician-patient-card card">
-                <h4>{{ pd.assignment.patient.first_name|default:pd.assignment.patient.username }}</h4>
-                <p class="text-secondary clinician-patient-email">{{ pd.assignment.patient.email }}</p>
-
-                <div class="heatmap-wrapper heatmap-sm" data-patient-id="{{ pd.assignment.patient.id }}">
-                    <canvas class="patient-heatmap" width="192" height="192"
-                            data-matrix="{{ pd.matrix_json }}"
-                            data-cells="{{ pd.cells_json }}"></canvas>
-                    <canvas class="patient-annotation" width="192" height="192"></canvas>
-                </div>
-
-                {% if pd.latest_annotation %}
-                    <p class="annotation-note">
-                        <strong>Pain marks:</strong> {{ pd.latest_annotation.cells|length }} cell{{ pd.latest_annotation.cells|length|pluralize }}
-                        &mdash; reported {{ pd.latest_annotation.timestamp|date:"N j, H:i" }}
-                    </p>
-                    {% if pd.latest_annotation.note %}
-                        <p class="annotation-note-text">&ldquo;{{ pd.latest_annotation.note }}&rdquo;</p>
+            {% if forloop.first %}
+            <button type="button"
+                    class="clinician-patient-item active"
+                    data-patient-id="{{ pd.patient_id }}"
+                    data-patient-name="{{ pd.patient_name }}"
+                    data-patient-email="{{ pd.patient_email }}">
+                <span class="clinician-patient-item-name">{{ pd.patient_name }}</span>
+                <span class="clinician-patient-item-email">{{ pd.patient_email }}</span>
+                <span class="clinician-patient-item-meta">
+                    {% if pd.has_data %}
+                        <span class="risk-pill risk-{{ pd.latest_risk_level|default:'low' }}">
+                            {{ pd.latest_risk_level|default:'low'|upper }}
+                        </span>
+                        <span>
+                            PPI {{ pd.latest_ppi|default:'--' }}
+                        </span>
+                    {% else %}
+                        <span class="risk-pill risk-none">NO DATA</span>
                     {% endif %}
-                {% else %}
-                    <p class="annotation-note text-secondary">No pain marks reported yet</p>
-                {% endif %}
-
-                {% if pd.latest_metrics %}
-                    <p class="annotation-note">
-                        <strong>Risk:</strong> {{ pd.latest_metrics.risk_score }}/100 ({{ pd.latest_metrics.risk_level|upper }})
-                    </p>
-                {% endif %}
-
-                {% if not pd.latest_frame %}
-                    <p class="text-secondary clinician-no-data">No pressure data available</p>
-                {% endif %}
-            </div>
+                </span>
+            </button>
+            {% else %}
+            <button type="button"
+                    class="clinician-patient-item"
+                    data-patient-id="{{ pd.patient_id }}"
+                    data-patient-name="{{ pd.patient_name }}"
+                    data-patient-email="{{ pd.patient_email }}">
+                <span class="clinician-patient-item-name">{{ pd.patient_name }}</span>
+                <span class="clinician-patient-item-email">{{ pd.patient_email }}</span>
+                <span class="clinician-patient-item-meta">
+                    {% if pd.has_data %}
+                        <span class="risk-pill risk-{{ pd.latest_risk_level|default:'low' }}">
+                            {{ pd.latest_risk_level|default:'low'|upper }}
+                        </span>
+                        <span>
+                            PPI {{ pd.latest_ppi|default:'--' }}
+                        </span>
+                    {% else %}
+                        <span class="risk-pill risk-none">NO DATA</span>
+                    {% endif %}
+                </span>
+            </button>
+            {% endif %}
             {% endfor %}
         </div>
-    {% else %}
-        <p>No patients assigned yet.</p>
-    {% endif %}
-</div>
+    </aside>
 
-<div class="card">
-    <h3>Flagged Events</h3>
-    <div id="flaggedEvents">No flagged events</div>
+    <section class="clinician-detail">
+        <div class="clinician-detail-header">
+            <div>
+                <h3 id="clinicianDetailName">Patient Details</h3>
+                <p id="clinicianDetailEmail" class="text-secondary"></p>
+            </div>
+            <div class="report-actions">
+                <a id="clinicianReportLink" href="#" class="btn btn-secondary btn-sm">Open Full Report</a>
+                <a id="clinicianReportCsvLink" href="#" class="btn btn-primary btn-sm">Download CSV</a>
+            </div>
+        </div>
+
+        <p id="clinicianDetailStatus" class="annotation-status"></p>
+
+        <div class="clinician-detail-grid">
+            <div class="card">
+                <h4>Latest Pressure Heatmap</h4>
+                <div class="heatmap-wrapper clinician-heatmap-lg">
+                    <canvas id="clinicianHeatmapCanvas" width="420" height="420"></canvas>
+                    <canvas id="clinicianAnnotationCanvas" width="420" height="420"></canvas>
+                </div>
+                <p id="clinicianAnnotationInfo" class="annotation-note text-secondary">No pain marks submitted.</p>
+            </div>
+
+            <div class="card">
+                <h4>Latest Metrics</h4>
+                <div class="metrics-grid clinician-metrics-grid">
+                    <div class="metric-card">
+                        <h4>PPI</h4>
+                        <p id="clinicianPpi" class="metric-value">--</p>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Contact %</h4>
+                        <p id="clinicianContact" class="metric-value">--</p>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Risk Score</h4>
+                        <p id="clinicianRiskScore" class="metric-value">--</p>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Risk Level</h4>
+                        <p id="clinicianRiskLevel" class="metric-value">--</p>
+                    </div>
+                </div>
+                <p id="clinicianLatestTimestamp" class="annotation-note text-secondary">Latest frame: --</p>
+                <canvas id="clinicianTrendChart" height="180"></canvas>
+            </div>
+        </div>
+
+        <div class="clinician-bottom-grid">
+            <div class="card">
+                <h4>Recent Pressure Frames</h4>
+                <div class="table-container clinician-frame-table-wrap">
+                    <table class="management-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Time</th>
+                                <th scope="col">PPI</th>
+                                <th scope="col">Contact %</th>
+                                <th scope="col">Risk</th>
+                                <th scope="col">Level</th>
+                                <th scope="col">Comments</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clinicianFrameRows">
+                            <tr><td colspan="6" class="text-secondary">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <h4>Recent Patient Comments</h4>
+                <div id="clinicianCommentList" class="comment-list">Loading comments...</div>
+            </div>
+        </div>
+    </section>
 </div>
+{% else %}
+<div class="card">
+    <h3>Assigned Patients</h3>
+    <p>No patients assigned yet.</p>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script src="{% static 'js/heatmap.js' %}"></script>
 <script src="{% static 'js/clinician_dashboard.js' %}"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.clinician-patient-card').forEach(function (card) {
-        var heatmapCanvas = card.querySelector('.patient-heatmap');
-        var annotCanvas = card.querySelector('.patient-annotation');
-        if (!heatmapCanvas) return;
-
-        var matrix = null;
-        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) { console.error('Error parsing matrix', e); }
-        var cells = [];
-        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) { console.error('Error parsing cells', e); }
-
-        if (matrix && Array.isArray(matrix)) {
-            try {
-                drawHeatmapOnCanvas(heatmapCanvas, matrix);
-            } catch (e) {
-                console.error('Error drawing heatmap', e);
-            }
-        }
-        if (cells && cells.length > 0) {
-            try {
-                drawAnnotationOnCanvas(annotCanvas, cells);
-            } catch (e) {
-                console.error('Error drawing annotation', e);
-            }
-        }
-    });
-});
-</script>
 {% endblock %}

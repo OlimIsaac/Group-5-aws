@@ -1,0 +1,70 @@
+{% extends 'core/base.html' %}
+{% block title %}Patient Medical History Report - Sensore{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div>
+        <h2>Patient Medical History Report</h2>
+        <p>
+            {{ patient.get_full_name|default:patient.username }} ({{ patient.email }})<br>
+            Generated {{ generated_at|date:"Y-m-d H:i" }} UTC
+        </p>
+        <a href="{% url 'clinician_dashboard' %}" class="btn-secondary">Back to Clinician Dashboard</a>
+    </div>
+    <a href="?download=1" class="btn-primary">Download CSV</a>
+</div>
+
+<div class="admin-grid report-summary-grid">
+    <div class="metric-card">
+        <h4>Total Frames</h4>
+        <p class="metric-value">{{ total_frames }}</p>
+    </div>
+    <div class="metric-card">
+        <h4>Average PPI</h4>
+        <p class="metric-value">{{ avg_ppi }}</p>
+    </div>
+    <div class="metric-card">
+        <h4>Average Contact %</h4>
+        <p class="metric-value">{{ avg_contact }}</p>
+    </div>
+    <div class="metric-card">
+        <h4>High Risk Events</h4>
+        <p class="metric-value">{{ high_events }}</p>
+    </div>
+</div>
+
+<div class="table-container">
+    {% if frame_rows %}
+    <table class="management-table">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Peak Pressure</th>
+                <th>Contact Area</th>
+                <th>Risk Score</th>
+                <th>Risk Level</th>
+                <th>High Risk</th>
+                <th>Comments</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in frame_rows %}
+            <tr>
+                <td>{{ row.frame.timestamp|date:"Y-m-d H:i:s" }}</td>
+                <td>{{ row.metrics.peak_pressure_index }}</td>
+                <td>{{ row.metrics.contact_area_percentage }}%</td>
+                <td>{{ row.metrics.risk_score }}</td>
+                <td>{{ row.metrics.risk_level|upper }}</td>
+                <td>{% if row.metrics.high_pressure_flag %}Yes{% else %}No{% endif %}</td>
+                <td>{{ row.comment_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No pressure history available for this patient yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
