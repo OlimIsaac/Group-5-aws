@@ -7,7 +7,7 @@
   /* ── HEATMAP CANVAS ── */
   .heatmap-container {
     position: relative;
-    background: rgba(0,0,0,0.3);
+    background: var(--surface-soft);
     border-radius: 10px;
     overflow: hidden;
     aspect-ratio: 1/1;
@@ -30,8 +30,8 @@
   }
   .legend-bar {
     height: 8px; width: 140px; border-radius: 4px;
-    background: linear-gradient(to right, #0a1628, #00308f, #00c8ff, #ffd700, #ff4500, #ff0000);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: linear-gradient(to right, var(--heatmap-empty), #00308f, #00c8ff, #ffd700, #ff4500, #ff0000);
+    border: 1px solid var(--input-border);
   }
 
   /* ── FRAME SCRUBBER ── */
@@ -78,8 +78,8 @@
   /* ── COMMENTS ── */
   .comments-list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 340px; overflow-y: auto; }
   .comment-item {
-    background: rgba(255,255,255,0.04); border-radius: var(--radius-sm);
-    border: 1px solid rgba(255,255,255,0.07); padding: 0.75rem 1rem;
+    background: var(--surface-soft); border-radius: var(--radius-sm);
+    border: 1px solid var(--surface-soft-border); padding: 0.75rem 1rem;
   }
   .comment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
   .comment-author { font-size: 0.8rem; font-weight: 600; }
@@ -113,7 +113,7 @@
   /* ── HOTZONE MARKERS ── */
   .hotzone-marker {
     position: absolute; width: 10px; height: 10px;
-    border: 2px solid rgba(255,255,255,0.8); border-radius: 50%;
+    border: 2px solid var(--hotzone-ring-border); border-radius: 50%;
     background: transparent;
     transform: translate(-50%, -50%);
     pointer-events: none;
@@ -292,6 +292,11 @@ let allFrames = [];
 let currentFrameIndex = 0;
 let currentSessionId = {{ selected_session.id|default:'null' }};
 let metricsChart = null;
+
+function readThemeVar(name, fallback) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
 
 // ── COLOUR MAP (navy → blue → cyan → yellow → red) ──
 function pressureToColour(val) {
@@ -485,11 +490,11 @@ async function loadMetricsChart(sessionId) {
       maintainAspectRatio: true,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: '#8fa8be', font: { size: 11 } } }
+        legend: { labels: { color: readThemeVar('--chart-legend', '#8fa8be'), font: { size: 11 } } }
       },
       scales: {
-        x: { ticks: { color: '#5a7a9a', font: { size: 9 }, maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-        y: { ticks: { color: '#5a7a9a', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' }, min: 0, max: 100 }
+        x: { ticks: { color: readThemeVar('--chart-axis', '#5a7a9a'), font: { size: 9 }, maxTicksLimit: 8 }, grid: { color: readThemeVar('--chart-grid', 'rgba(255,255,255,0.04)') } },
+        y: { ticks: { color: readThemeVar('--chart-axis', '#5a7a9a'), font: { size: 9 } }, grid: { color: readThemeVar('--chart-grid', 'rgba(255,255,255,0.04)') }, min: 0, max: 100 }
       }
     }
   });
@@ -531,7 +536,7 @@ function renderComments(comments) {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function submitComment() {
@@ -605,5 +610,11 @@ function stopPolling() {
 
 document.getElementById("sessionSelect").addEventListener("change", () => startPolling());
 if (currentSessionId) startPolling();
+
+document.addEventListener('theme:changed', () => {
+  if (currentSessionId) {
+    loadMetricsChart(currentSessionId);
+  }
+});
 </script>
 {% endblock %}

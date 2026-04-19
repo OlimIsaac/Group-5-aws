@@ -5,6 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sensore{% endblock %}</title>
+    <script>
+        (function () {
+            var theme = 'light';
+            try {
+                var saved = localStorage.getItem('sensore-theme');
+                if (saved === 'light' || saved === 'dark') {
+                    theme = saved;
+                }
+            } catch (e) {}
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 </head>
 <body>
@@ -28,6 +40,10 @@
         {% else %}
             <a href="{% url 'login' %}">Login</a>
         {% endif %}
+        <button type="button" id="coreThemeToggle" class="theme-toggle" aria-label="Toggle dark and light mode" title="Toggle dark and light mode">
+            <span class="theme-toggle-icon" id="coreThemeToggleIcon">☀</span>
+            <span class="theme-toggle-label" id="coreThemeToggleLabel">Light</span>
+        </button>
     </div>
 </nav>
 <main>
@@ -35,6 +51,41 @@
 </main>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/heatmap.js' %}"></script>
+<script>
+    (function () {
+        var root = document.documentElement;
+        var toggle = document.getElementById('coreThemeToggle');
+        var icon = document.getElementById('coreThemeToggleIcon');
+        var label = document.getElementById('coreThemeToggleLabel');
+
+        function paint(theme) {
+            if (!icon || !label) return;
+            icon.textContent = theme === 'dark' ? '🌙' : '☀';
+            label.textContent = theme === 'dark' ? 'Dark' : 'Light';
+        }
+
+        function applyTheme(theme, persist) {
+            var finalTheme = (theme === 'dark' || theme === 'light') ? theme : 'light';
+            root.setAttribute('data-theme', finalTheme);
+            paint(finalTheme);
+            if (persist) {
+                try {
+                    localStorage.setItem('sensore-theme', finalTheme);
+                } catch (e) {}
+            }
+            document.dispatchEvent(new CustomEvent('theme:changed', { detail: { theme: finalTheme } }));
+        }
+
+        applyTheme(root.getAttribute('data-theme') || 'light', false);
+
+        if (toggle) {
+            toggle.addEventListener('click', function () {
+                var next = (root.getAttribute('data-theme') || 'light') === 'light' ? 'dark' : 'light';
+                applyTheme(next, true);
+            });
+        }
+    })();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

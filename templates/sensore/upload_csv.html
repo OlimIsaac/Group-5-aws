@@ -99,7 +99,7 @@
 
   /* ── PROGRESS ── */
   .progress-bar-wrap {
-    height: 6px; background: rgba(255,255,255,0.07);
+    height: 6px; background: var(--surface-soft);
     border-radius: 3px; overflow: hidden; margin: 0.75rem 0;
     display: none;
   }
@@ -128,14 +128,14 @@
     font-size: 0.7rem; font-family: var(--font-mono);
     text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--mist); padding: 6px 10px; text-align: left;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
+    border-bottom: 1px solid var(--line-subtle);
   }
   .upload-history-table td {
     padding: 9px 10px; font-size: 0.83rem; color: var(--pale);
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid var(--line-faint);
   }
   .upload-history-table tr:last-child td { border: none; }
-  .upload-history-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .upload-history-table tr:hover td { background: var(--row-hover); }
 </style>
 {% endblock %}
 

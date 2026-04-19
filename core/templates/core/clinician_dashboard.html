@@ -20,8 +20,8 @@
         <div class="clinician-patient-grid">
             {% for pd in patients_data %}
             <div class="clinician-patient-card card">
-                <h4>{{ pd.assignment.patient.user.first_name|default:pd.assignment.patient.user.username }}</h4>
-                <p class="text-secondary" style="font-size:0.85rem;margin-bottom:0.5rem;">{{ pd.assignment.patient.user.email }}</p>
+                <h4>{{ pd.assignment.patient.first_name|default:pd.assignment.patient.username }}</h4>
+                <p class="text-secondary clinician-patient-email">{{ pd.assignment.patient.email }}</p>
 
                 <div class="heatmap-wrapper heatmap-sm" data-patient-id="{{ pd.assignment.patient.id }}">
                     <canvas class="patient-heatmap" width="192" height="192"
@@ -43,7 +43,7 @@
                 {% endif %}
 
                 {% if not pd.latest_frame %}
-                    <p class="text-secondary" style="font-size:0.8rem;">No pressure data available</p>
+                    <p class="text-secondary clinician-no-data">No pressure data available</p>
                 {% endif %}
             </div>
             {% endfor %}

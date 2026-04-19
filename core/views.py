@@ -1,41 +1,40 @@
 import csv
 import io
 import json
+from collections import defaultdict
 from datetime import datetime, timedelta
 
-from django.db import IntegrityError
-from django.shortcuts import render, redirect, get_object_or_404
-from django.views import View
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth import login, logout, authenticate
-from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
-
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import IntegrityError
+from django.http import HttpResponseForbidden, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from collections import defaultdict
-
-from .models import (
-    User, PressureFrame, ClinicianProfile, ClinicianPatientAssignment,
-    PatientProfile, Comment, PainZoneReport, HeatmapAnnotation, PREDEFINED_ZONES,
-    SensorData, Feedback
-)
-from .forms import (
-    CommentForm, ClinicianPatientAssignmentForm, UserForm,
-    ClinicianProfileForm, PatientProfileForm,
-    CustomUserCreationForm, PainZoneReportForm, FeedbackForm, FeedbackAdminForm,
-)
-
+from django.views import View
+from django_filters.rest_framework import DjangoFilterBackend
 # DRF imports
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
-from .serializers import UserSerializer, ClinicianPatientAssignmentSerializer, SensorDataSerializer, FeedbackSerializer
-from .permissions import IsAdmin, IsClinician, IsPatient, IsOwnerOrAssignedClinician
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .forms import (ClinicianPatientAssignmentForm, ClinicianProfileForm,
+                    CommentForm, CustomUserCreationForm, FeedbackAdminForm,
+                    FeedbackForm, PainZoneReportForm, PatientProfileForm,
+                    UserForm)
+from .models import (PREDEFINED_ZONES, ClinicianPatientAssignment,
+                     ClinicianProfile, Comment, Feedback, HeatmapAnnotation,
+                     PainZoneReport, PatientProfile, PressureFrame, SensorData,
+                     User)
+from .permissions import (IsAdmin, IsClinician, IsOwnerOrAssignedClinician,
+                          IsPatient)
+from .serializers import (ClinicianPatientAssignmentSerializer,
+                          FeedbackSerializer, SensorDataSerializer,
+                          UserSerializer)
 
 # Temporary merge branch 2
 
@@ -203,7 +202,7 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
             for assignment in assignments:
                 patient_user = assignment.patient
                 latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
-                latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
+                latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).order_by('-timestamp').first()
                 matrix_json = 'null'
                 if latest_frame:
                     try:
