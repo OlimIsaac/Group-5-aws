@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}My Dashboard — Sensore{% endblock %}
 {% block nav_patient %}active{% endblock %}
 
@@ -33,6 +34,101 @@
     background: linear-gradient(to right, #0a1628, #00308f, #00c8ff, #ffd700, #ff4500, #ff0000);
     border: 1px solid rgba(255,255,255,0.1);
   }
+  .heatmap-status {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+    color: var(--pale);
+  }
+  .heatmap-simple-explanation {
+    margin-top: 0.85rem;
+    border-radius: 12px;
+    border: 1px solid rgba(0,212,200,0.12);
+    background: rgba(0,212,200,0.08);
+    color: #e8f9ff;
+    padding: 0.95rem 1rem;
+    line-height: 1.5;
+    font-size: 0.92rem;
+  }
+  .comment-toolbar {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .comment-toolbar .btn {
+    min-width: 135px;
+  }
+  .comment-panel {
+    margin-top: 1.2rem;
+  }
+  .comment-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+  .comment-panel-header .comment-count {
+    color: var(--mist);
+    font-size: 0.82rem;
+  }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 9999;
+  }
+  .modal-dialog {
+    width: min(560px, 100%);
+    background: rgba(10, 22, 40, 0.96);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+    overflow: hidden;
+  }
+  .modal-header, .modal-footer {
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-header h3 {
+    font-size: 1rem;
+    margin: 0;
+  }
+  .modal-close {
+    border: none;
+    background: transparent;
+    color: var(--pale);
+    font-size: 1.3rem;
+    cursor: pointer;
+  }
+  .modal-body {
+    padding: 1rem 1.2rem 1.1rem;
+  }
+  .modal-body .form-control {
+    min-height: 120px;
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    background: rgba(15,39,68,0.95);
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+  .hidden { display: none !important; }
 
   /* ── FRAME SCRUBBER ── */
   .scrubber-wrap {
@@ -189,12 +285,37 @@
             <div class="legend-bar"></div>
             <span>Critical</span>
           </div>
+          <div id="heatmapStatus" class="heatmap-status">
+            <span class="live-dot"></span> Live • Updating every 2.5 seconds
+          </div>
+          <div id="heatmapExplanation" class="heatmap-simple-explanation">
+            A live pressure summary will appear here as the heatmap updates.
+          </div>
           <div class="scrubber-wrap">
             <input type="range" id="frameScrubber" min="0" max="0" value="0" />
             <div class="scrubber-labels">
               <span id="scrubberStart">—</span>
               <span id="frameInfo" class="mono" style="font-size:0.7rem;color:var(--teal)">Frame <span id="frameNum">—</span></span>
               <span id="scrubberEnd">—</span>
+            </div>
+          </div>
+          <div class="comment-toolbar">
+            <button class="btn btn-secondary btn-sm" type="button" onclick="openCommentModal()">
+              Add comment for current time
+            </button>
+            <div class="mono" style="color:var(--mist);font-size:0.82rem">
+              Current frame: <span id="commentFrameLabel">—</span>
+            </div>
+          </div>
+          <div class="comment-panel">
+            <div class="comment-panel-header">
+              <span class="card-title">My Comments</span>
+              <span class="comment-count" id="commentCount">0 comments</span>
+            </div>
+            <div class="comments-list" id="commentsList">
+              <div class="text-muted" style="font-size:0.85rem;text-align:center;padding:1rem">
+                No comments yet. Use the button above to add a note for a specific time.
+              </div>
             </div>
           </div>
         </div>
@@ -258,40 +379,89 @@
         </div>
       </div>
 
-      <!-- COMMENTS -->
-      <div class="card" style="flex:1">
+      <!-- MEDICAL HISTORY REPORT -->
+      <div class="card">
         <div class="card-header">
-          <span class="card-title">My Notes</span>
+          <span class="card-title">Medical History Report</span>
         </div>
-        <div class="card-body" style="display:flex;flex-direction:column;gap:0.75rem">
-          <!-- Add comment form -->
-          <div class="form-group">
-            <textarea id="commentText" class="form-control" placeholder="Add a note about your current position or how you're feeling..."></textarea>
+        <div class="card-body">
+          <div class="metric-block" style="margin-bottom:1rem;">
+            <div class="metric-label">Recent session average</div>
+            <div class="metric-value" id="reportAvgPPI">{{ report_overall.avg_ppi }} / 4095</div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="submitComment()" style="align-self:flex-start">
-            Add Note
-          </button>
-          <div class="comments-list" id="commentsList">
-            <div class="text-muted" style="font-size:0.85rem;text-align:center;padding:1rem">
-              No notes yet. Add a comment above.
-            </div>
+          <div class="metric-block" style="margin-bottom:1rem;">
+            <div class="metric-label">Average risk score</div>
+            <div class="metric-value" id="reportAvgRisk">{{ report_overall.avg_risk_score }} / 100</div>
+          </div>
+          <div class="metric-block" style="margin-bottom:1rem;">
+            <div class="metric-label">Average contact area</div>
+            <div class="metric-value" id="reportAvgArea">{{ report_overall.avg_contact_area }}%</div>
+          </div>
+          <div class="metric-block" style="margin-bottom:1rem;">
+            <div class="metric-label">Sessions included</div>
+            <div class="metric-value">{{ report_overall.session_count }}</div>
+          </div>
+          {% if report_sessions %}
+          <div class="metric-label" style="margin-top:0.5rem">Most recent sessions</div>
+          <div style="font-size:0.85rem;color:var(--fog);margin-bottom:1rem">
+            {% for rs in report_sessions|slice:":3" %}
+              <div style="margin-bottom:0.45rem;">
+                {{ rs.session.session_date|date:"d M Y" }} — {{ rs.session.start_time|date:"H:i" }} • {{ rs.avg_risk_score }} risk
+              </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="text-muted" style="font-size:0.9rem;margin-bottom:1rem">
+            No session history is available yet for report generation.
+          </div>
+          {% endif %}
+          <div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+            <a href="{% url 'patient_report' %}" class="btn btn-primary btn-sm">View full report</a>
+            <a href="{% url 'patient_report' %}?format=csv" class="btn btn-secondary btn-sm">Download CSV</a>
           </div>
         </div>
       </div>
 
     </div>
+
   </div>
 
 </div>
+
+<div id="commentModal" class="modal-backdrop hidden" onclick="if(event.target===this) closeCommentModal()">
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="commentModalTitle">
+    <div class="modal-header">
+      <h3 id="commentModalTitle">Add a comment for the current time</h3>
+      <button class="modal-close" type="button" onclick="closeCommentModal()" aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="commentInput">Comment</label>
+        <textarea id="commentInput" class="form-control" placeholder="Describe the event or pressure change..." rows="5"></textarea>
+      </div>
+      <p class="mono" style="color:var(--mist);margin-top:0.75rem;">Timestamp: <span id="commentTimestamp">—</span></p>
+      <p class="mono" style="color:var(--mist);margin-top:0.25rem;">Frame: <span id="commentFrameRef">—</span></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" type="button" onclick="closeCommentModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" type="button" onclick="submitComment()">Save comment</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'js/heatmap.js' %}"></script>
 <script>
 const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
 let allFrames = [];
 let currentFrameIndex = 0;
 let currentSessionId = {{ selected_session.id|default:'null' }};
 let metricsChart = null;
+let liveHeatmapTimer = null;
+let latestLiveMatrix = null;
+let currentCommentFrameId = null;
 
 // ── COLOUR MAP (navy → blue → cyan → yellow → red) ──
 function pressureToColour(val) {
@@ -316,20 +486,89 @@ function pressureToColour(val) {
   ];
 }
 
-// ── DRAW HEATMAP ──
-function drawHeatmap(data32x32) {
-  const canvas = document.getElementById('heatmapCanvas');
-  const ctx = canvas.getContext('2d');
-  const imgData = ctx.createImageData(32, 32);
-  const flat = data32x32.flat ? data32x32.flat() : data32x32;
-  for (let i = 0; i < 1024; i++) {
-    const [r, g, b] = pressureToColour(flat[i]);
-    imgData.data[i * 4]     = r;
-    imgData.data[i * 4 + 1] = g;
-    imgData.data[i * 4 + 2] = b;
-    imgData.data[i * 4 + 3] = 255;
+// ── LIVE HEATMAP RENDERING ──
+function renderHeatmapFrame(data32x32, live = true) {
+  if (!data32x32) return;
+  drawHeatmap('heatmapCanvas', data32x32);
+  document.getElementById('heatmapStatus').textContent = live
+    ? '🟢 Live • Updating every 2.5 seconds'
+    : '🟡 Showing selected frame';
+  document.getElementById('heatmapExplanation').textContent = pressureMatrixExplanation(data32x32);
+}
+
+function createLiveHeatmapFrame(baseData) {
+  if (typeof generateLivePressureMatrix === 'function') {
+    return generateLivePressureMatrix(baseData);
   }
-  ctx.putImageData(imgData, 0, 0);
+  return baseData;
+}
+
+function startLiveHeatmapUpdates() {
+  stopLiveHeatmapUpdates();
+  if (!currentSessionId) return;
+  liveHeatmapTimer = setInterval(() => {
+    const source = allFrames.length ? allFrames[allFrames.length - 1] : null;
+    if (!source || !source.data) return;
+    latestLiveMatrix = createLiveHeatmapFrame(source.data);
+    renderHeatmapFrame(latestLiveMatrix, true);
+
+    const scrubber = document.getElementById('frameScrubber');
+    if (parseInt(scrubber.value, 10) >= parseInt(scrubber.max, 10)) {
+      scrubber.value = scrubber.max;
+      document.getElementById('frameNum').textContent = source.frame_index;
+    }
+  }, 2500);
+}
+
+function openCommentModal() {
+  const modal = document.getElementById('commentModal');
+  const frame = allFrames[currentFrameIndex] || null;
+  currentCommentFrameId = frame?.id || null;
+  document.getElementById('commentTimestamp').textContent = frame
+    ? new Date(frame.timestamp).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  document.getElementById('commentFrameRef').textContent = frame ? `#${frame.frame_index}` : 'Live';
+  document.getElementById('commentFrameLabel').textContent = frame ? `#${frame.frame_index}` : 'Live';
+  document.getElementById('commentInput').value = '';
+  modal.classList.remove('hidden');
+  document.getElementById('commentInput').focus();
+}
+
+function closeCommentModal() {
+  document.getElementById('commentModal').classList.add('hidden');
+}
+
+async function submitComment() {
+  const text = document.getElementById('commentInput').value.trim();
+  if (!text || !currentSessionId) return;
+
+  const currentFrame = allFrames[currentFrameIndex];
+  const payload = {
+    text,
+    frame_id: currentCommentFrameId || currentFrame?.id || null,
+    timestamp: currentFrame?.timestamp || new Date().toISOString(),
+  };
+
+  const resp = await fetch(`/api/session/${currentSessionId}/comment/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify(payload),
+  });
+
+  if (resp.ok) {
+    closeCommentModal();
+    await loadComments(currentSessionId);
+  } else {
+    const err = await resp.json().catch(() => ({}));
+    console.error('Failed to save comment', err);
+  }
+}
+
+function stopLiveHeatmapUpdates() {
+  if (liveHeatmapTimer) {
+    clearInterval(liveHeatmapTimer);
+    liveHeatmapTimer = null;
+  }
 }
 
 // ── UPDATE HOT ZONE MARKERS ──
@@ -404,6 +643,7 @@ async function loadSession(sessionId) {
 
     // Show latest frame
     showFrame(allFrames.length - 1);
+  startLiveHeatmapUpdates();
 
     // Load chart
     loadMetricsChart(sessionId);
@@ -423,7 +663,7 @@ function showFrame(idx) {
   currentFrameIndex = idx;
   const frame = allFrames[idx];
 
-  drawHeatmap(frame.data);
+  renderHeatmapFrame(frame.data, idx === allFrames.length - 1);
   updateMetrics(frame.metrics);
 
   document.getElementById('frameNum').textContent = frame.frame_index;
@@ -504,8 +744,9 @@ async function loadComments(sessionId) {
 
 function renderComments(comments) {
   const list = document.getElementById('commentsList');
+  document.getElementById('commentCount').textContent = `${comments.length} comment${comments.length === 1 ? '' : 's'}`;
   if (!comments.length) {
-    list.innerHTML = '<div class="text-muted" style="font-size:0.85rem;text-align:center;padding:1rem">No notes yet.</div>';
+    list.innerHTML = '<div class="text-muted" style="font-size:0.85rem;text-align:center;padding:1rem">No comments yet. Add one with the button above.</div>';
     return;
   }
   list.innerHTML = comments.map(c => `
@@ -532,29 +773,6 @@ function renderComments(comments) {
 
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-async function submitComment() {
-  const text = document.getElementById('commentText').value.trim();
-  if (!text || !currentSessionId) return;
-
-  const currentFrame = allFrames[currentFrameIndex];
-  const payload = {
-    text,
-    frame_id: currentFrame?.id || null,
-    timestamp: currentFrame?.timestamp || new Date().toISOString(),
-  };
-
-  const resp = await fetch(`/api/session/${currentSessionId}/comment/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-    body: JSON.stringify(payload),
-  });
-
-  if (resp.ok) {
-    document.getElementById('commentText').value = '';
-    loadComments(currentSessionId);
-  }
 }
 
 async function acknowledgeAlert(alertId) {

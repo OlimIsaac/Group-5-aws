@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from .models import User, Comment, ClinicianPatientAssignment, ClinicianProfile, PatientProfile, PREDEFINED_ZONES, Feedback, PressureFrame, SensorData
+from sensore.models import SensorFrame
 
 
 class CustomUserCreationForm(UserCreationForm):
@@ -72,6 +73,9 @@ class ClinicianPatientAssignmentForm(forms.ModelForm):
         return cleaned_data
 
 
+AssignmentForm = ClinicianPatientAssignmentForm
+
+
 class ClinicianProfileForm(forms.ModelForm):
     class Meta:
         model = ClinicianProfile
@@ -98,8 +102,8 @@ class PainZoneReportForm(forms.Form):
 
 
 class FeedbackForm(forms.ModelForm):
-    sensor_data = forms.ModelChoiceField(
-        queryset=SensorData.objects.none(),
+    sensor_frame = forms.ModelChoiceField(
+        queryset=SensorFrame.objects.none(),
         empty_label="Select a sensor reading...",
         widget=forms.Select(attrs={'class': 'form-control'}),
         label="Sensor Reading",
@@ -118,7 +122,13 @@ class FeedbackForm(forms.ModelForm):
 
     class Meta:
         model = Feedback
-        fields = ['sensor_data']
+        fields = ['sensor_frame']
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if self.user:
+            self.fields['sensor_frame'].queryset = SensorFrame.objects.filter(session__patient=self.user)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -133,7 +143,7 @@ class FeedbackForm(forms.ModelForm):
 
     def save(self, commit=True):
         feedback = super().save(commit=False)
-        feedback.comment = self.cleaned_data.get('feedback_text', '').strip()
+        feedback.feedback_text = self.cleaned_data.get('feedback_text', '').strip()
         if commit:
             feedback.save()
         return feedback

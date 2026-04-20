@@ -6,7 +6,7 @@
     <div class="confirm-card">
         <h2>Confirm Delete Assignment</h2>
         <p class="confirm-message">
-            Are you sure you want to remove <strong>{{ assignment.patient.get_full_name|default:assignment.patient.username }}</strong> from <strong>{{ assignment.clinician.get_full_name|default:assignment.clinician.username }}</strong>?
+            Are you sure you want to remove <strong>{{ assignment.patient.user.get_full_name|default:assignment.patient.user.username }}</strong> from <strong>{{ assignment.clinician.user.get_full_name|default:assignment.clinician.user.username }}</strong>?
         </p>
         <p class="warning-text">This action cannot be undone.</p>
 

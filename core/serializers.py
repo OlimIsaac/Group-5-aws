@@ -52,6 +52,6 @@ class FeedbackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Feedback
         fields = [
-            'id', 'user', 'sensor_data', 'comment', 'status',
-            'admin_notes', 'reviewed_at', 'reviewed_by', 'created_at'
+            'id', 'user', 'sensor_data', 'feedback_text', 'status',
+            'admin_notes', 'reviewed_at', 'reviewed_by', 'timestamp'
         ]

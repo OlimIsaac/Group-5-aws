@@ -1,0 +1,86 @@
+{% extends 'core/base.html' %}
+{% block title %}Patient Pain Reports - Sensore{% endblock %}
+
+{% block content %}
+<div class="management-header">
+    <div>
+        <h2>Patient Pain Zone Reports</h2>
+        <a href="{% url 'admin_dashboard' %}" class="btn-secondary">← Back to Dashboard</a>
+    </div>
+</div>
+
+{% if reports %}
+<div class="table-container">
+    <table class="management-table">
+        <thead>
+            <tr>
+                <th>Patient</th>
+                <th>Zones</th>
+                <th>Note</th>
+                <th>Submitted</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for report in reports %}
+            <tr>
+                <td>{{ report.user.get_full_name|default:report.user.username }}</td>
+                <td>{{ report.zones|join:", " }}</td>
+                <td>{{ report.note|default:"—"|truncatechars:80 }}</td>
+                <td>{{ report.timestamp|date:"M d, Y H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No patient pain zone reports have been submitted yet.</p>
+</div>
+{% endif %}
+
+<style>
+.management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.table-container {
+    background: white;
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 18px 50px rgba(32, 40, 61, 0.08);
+    overflow-x: auto;
+}
+
+.management-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+}
+
+.management-table th {
+    background-color: #f4f7fb;
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 2px solid #e2e8f0;
+    font-weight: 700;
+    color: #344050;
+}
+
+.management-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e8eff7;
+    color: #4a5568;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+}
+</style>
+{% endblock %}

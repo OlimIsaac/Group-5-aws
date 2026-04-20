@@ -196,10 +196,8 @@ def generate_plain_english(ppi, contact_area, asymmetry, risk_level, risk_score)
     return f"{pressure_msg}\n\n{area_msg}\n\n{asym_msg}\n\n{rec}"
 
 
-def analyse_frame(frame_obj):
-    """Full analysis of a SensorFrame. Returns and saves PressureMetrics."""
-    from .models import PressureMetrics
-
+def compute_frame_metrics(frame_obj):
+    """Compute pressure metrics for a SensorFrame and return the data dictionary."""
     matrix       = parse_frame_data(frame_obj.data)
     ppi          = calculate_peak_pressure_index(matrix)
     contact_area = calculate_contact_area(matrix)
@@ -211,18 +209,29 @@ def analyse_frame(frame_obj):
     risk_level   = get_risk_level(risk_score)
     explanation  = generate_plain_english(ppi, contact_area, asymmetry, risk_level, risk_score)
 
+    return {
+        'peak_pressure_index': round(ppi, 1),
+        'contact_area_percent': contact_area,
+        'average_pressure':    round(avg_pressure, 1),
+        'asymmetry_score':     asymmetry,
+        'risk_level':          risk_level,
+        'risk_score':          risk_score,
+        'hot_zones':           json.dumps(hot_zones),
+        'plain_english':       explanation,
+    }
+
+
+def analyse_frame(frame_obj, save=True):
+    """Full analysis of a SensorFrame. Returns and optionally saves PressureMetrics."""
+    from .models import PressureMetrics
+
+    metrics_data = compute_frame_metrics(frame_obj)
+    if not save:
+        return metrics_data
+
     metrics, _ = PressureMetrics.objects.update_or_create(
         frame=frame_obj,
-        defaults={
-            'peak_pressure_index': round(ppi, 1),
-            'contact_area_percent': contact_area,
-            'average_pressure':    round(avg_pressure, 1),
-            'asymmetry_score':     asymmetry,
-            'risk_level':          risk_level,
-            'risk_score':          risk_score,
-            'hot_zones':           json.dumps(hot_zones),
-            'plain_english':       explanation,
-        }
+        defaults=metrics_data,
     )
     return metrics
 

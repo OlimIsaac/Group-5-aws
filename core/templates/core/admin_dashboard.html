@@ -50,5 +50,11 @@
         <p>Review and manage user feedback on sensor data accuracy.</p>
         <a href="{% url 'feedback_list' %}" class="btn-admin">Manage Feedback</a>
     </div>
+
+    <div class="admin-card">
+        <h3>Patient Pain Reports</h3>
+        <p>Review pain zone submissions from patients for clinical follow-up.</p>
+        <a href="{% url 'pain_zone_report_list' %}" class="btn-admin">View Reports</a>
+    </div>
 </div>
 {% endblock %}

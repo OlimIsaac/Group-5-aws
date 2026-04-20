@@ -8,9 +8,11 @@ from django.contrib.auth import login, logout, authenticate
 from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
 
-from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
+from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, SensorData, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
+from sensore.models import SensorFrame
 from .utils import LOW_PRESSURE_THRESHOLD, HIGH_PRESSURE_THRESHOLD
 from .forms import CommentForm, AssignmentForm, PainZoneReportForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm, FeedbackForm, FeedbackAdminForm
+from .reports import generate_patient_report
 
 
 class HomeView(View):
@@ -48,10 +50,17 @@ class PatientDashboardView(LoginRequiredMixin, View):
         latest_pain_report = PainZoneReport.objects.filter(
             user=request.user
         ).order_by('-timestamp').first()
+        
+        # Get recent pressure frames for commenting
+        recent_frames = SensorFrame.objects.filter(
+            session__patient=request.user
+        ).order_by('-timestamp')[:20]
+        
         return render(request, 'core/patient_dashboard.html', {
             'zone_choices': PREDEFINED_ZONES,
             'latest_pain_report': latest_pain_report,
             'form': form,
+            'recent_frames': recent_frames,
         })
 
 
@@ -92,9 +101,9 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
 
         now = timezone.now()
         since = now - timedelta(hours=hours)
-        frames = PressureFrame.objects.filter(
-            user=request.user, timestamp__gte=since
-        ).order_by('timestamp')
+        frames = SensorFrame.objects.filter(
+            session__patient=request.user, timestamp__gte=since
+        ).select_related('metrics').order_by('timestamp')
 
         if not frames.exists():
             return JsonResponse({
@@ -120,7 +129,8 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
                 bucket_counts[bucket_time] = 0
 
         for frame in frames:
-            if frame.high_pressure_flag:
+            metrics = getattr(frame, 'metrics', None)
+            if metrics and metrics.risk_level in ('high', 'critical'):
                 bucket_time = frame.timestamp.replace(
                     minute=0, second=0, microsecond=0
                 )
@@ -132,11 +142,14 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
 
         latest_annotation = HeatmapAnnotation.objects.filter(user=request.user).first()
 
+        # Get metrics from the related metrics object
+        metrics = getattr(latest, 'metrics', None)
+        
         return JsonResponse({
-            "alert": latest.high_pressure_flag,
-            "latest_ppi": latest.peak_pressure_index,
-            "latest_contact": latest.contact_area_percentage,
-            "latest_matrix": latest.raw_matrix,
+            "alert": metrics.risk_level in ('high', 'critical') if metrics else False,
+            "latest_ppi": metrics.peak_pressure_index if metrics else None,
+            "latest_contact": metrics.contact_area_percent if metrics else None,
+            "latest_matrix": json.loads(latest.data) if latest else None,
             "chart_data": {"labels": labels, "counts": counts},
             "saved_annotation": latest_annotation.cells if latest_annotation else [],
         })
@@ -484,39 +497,39 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
         if request.user.role not in [User.ROLE_PATIENT, User.ROLE_CLINICIAN]:
             return redirect('home')
         
-        # Filter available frames based on user role
+        # Filter available sensor readings based on user role
         if request.user.role == User.ROLE_PATIENT:
-            frames = PressureFrame.objects.filter(user=request.user)
+            readings = SensorFrame.objects.filter(session__patient=request.user)
         elif request.user.role == User.ROLE_CLINICIAN:
             try:
                 profile = ClinicianProfile.objects.get(user=request.user)
                 assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
-                frames = PressureFrame.objects.filter(user__in=assigned_patients)
+                readings = SensorFrame.objects.filter(session__patient__in=assigned_patients)
             except ClinicianProfile.DoesNotExist:
-                frames = PressureFrame.objects.none()
+                readings = SensorFrame.objects.none()
         else:
-            frames = PressureFrame.objects.none()
+            readings = SensorFrame.objects.none()
         
-        form = FeedbackForm()
-        form.fields['pressure_frame'].queryset = frames
+        form = FeedbackForm(user=request.user)
+        form.fields['sensor_frame'].queryset = readings
         return render(request, 'core/feedback_submit.html', {'form': form})
 
     def post(self, request):
         if request.user.role not in [User.ROLE_PATIENT, User.ROLE_CLINICIAN]:
             return redirect('home')
         
-        form = FeedbackForm(request.POST)
+        form = FeedbackForm(request.POST, user=request.user)
         if form.is_valid():
-            frame = form.cleaned_data['pressure_frame']
+            reading = form.cleaned_data['sensor_frame']
             
             # Additional permission check
-            if request.user.role == User.ROLE_PATIENT and frame.user != request.user:
+            if request.user.role == User.ROLE_PATIENT and reading.session.patient != request.user:
                 messages.error(request, "You can only submit feedback on your own sensor data")
                 return redirect('submit_feedback')
             elif request.user.role == User.ROLE_CLINICIAN:
                 try:
                     profile = ClinicianProfile.objects.get(user=request.user)
-                    if not Assignment.objects.filter(clinician=profile, patient__user=frame.user).exists():
+                    if not Assignment.objects.filter(clinician=profile, patient__user=reading.session.patient).exists():
                         messages.error(request, "You are not assigned to this patient")
                         return redirect('submit_feedback')
                 except ClinicianProfile.DoesNotExist:
@@ -531,18 +544,18 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
         
         # If form is invalid, re-render with errors
         if request.user.role == User.ROLE_PATIENT:
-            frames = PressureFrame.objects.filter(user=request.user)
+            readings = SensorFrame.objects.filter(session__patient=request.user)
         elif request.user.role == User.ROLE_CLINICIAN:
             try:
                 profile = ClinicianProfile.objects.get(user=request.user)
                 assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
-                frames = PressureFrame.objects.filter(user__in=assigned_patients)
+                readings = SensorFrame.objects.filter(session__patient__in=assigned_patients)
             except ClinicianProfile.DoesNotExist:
-                frames = PressureFrame.objects.none()
+                readings = SensorFrame.objects.none()
         else:
-            frames = PressureFrame.objects.none()
+            readings = SensorFrame.objects.none()
         
-        form.fields['pressure_frame'].queryset = frames
+        form.fields['sensor_frame'].queryset = readings
         return render(request, 'core/feedback_submit.html', {'form': form})
 
 
@@ -550,11 +563,41 @@ class FeedbackListView(LoginRequiredMixin, View):
     login_url = 'login'
 
     def get(self, request):
-        if request.user.role != User.ROLE_ADMIN:
+        if request.user.role == User.ROLE_ADMIN:
+            feedbacks = Feedback.objects.select_related('user', 'sensor_data', 'reviewed_by').all().order_by('-timestamp')
+        elif request.user.role == User.ROLE_CLINICIAN:
+            try:
+                profile = ClinicianProfile.objects.get(user=request.user)
+                assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
+                feedbacks = Feedback.objects.select_related('user', 'sensor_data', 'reviewed_by').filter(sensor_data__user__in=assigned_patients).order_by('-timestamp')
+            except ClinicianProfile.DoesNotExist:
+                feedbacks = Feedback.objects.none()
+        else:
             return redirect('home')
-        
-        feedbacks = Feedback.objects.select_related('user', 'pressure_frame', 'reviewed_by').all()
-        return render(request, 'core/feedback_list.html', {'feedbacks': feedbacks})
+
+        return render(request, 'core/feedback_list.html', {
+            'feedbacks': feedbacks,
+            'is_clinician': request.user.role == User.ROLE_CLINICIAN,
+        })
+
+
+class PainZoneReportListView(LoginRequiredMixin, View):
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role == User.ROLE_ADMIN:
+            reports = PainZoneReport.objects.select_related('user').order_by('-timestamp')
+        elif request.user.role == User.ROLE_CLINICIAN:
+            try:
+                profile = ClinicianProfile.objects.get(user=request.user)
+                assigned_patients = Assignment.objects.filter(clinician=profile).values_list('patient__user', flat=True)
+                reports = PainZoneReport.objects.select_related('user').filter(user__in=assigned_patients).order_by('-timestamp')
+            except ClinicianProfile.DoesNotExist:
+                reports = PainZoneReport.objects.none()
+        else:
+            return redirect('home')
+
+        return render(request, 'core/pain_zone_report_list.html', {'reports': reports})
 
 
 class FeedbackDetailView(LoginRequiredMixin, View):
@@ -608,3 +651,46 @@ class DeleteFeedbackView(LoginRequiredMixin, View):
         feedback = get_object_or_404(Feedback, pk=feedback_id)
         feedback.delete()
         return redirect('feedback_list')
+
+
+class PatientAddCommentView(LoginRequiredMixin, View):
+    """Allow patients to add comments on specific pressure frames."""
+    login_url = 'login'
+
+    def post(self, request, frame_id):
+        if request.user.role != User.ROLE_PATIENT:
+            return JsonResponse({"error": "forbidden"}, status=403)
+
+        frame = get_object_or_404(PressureFrame, pk=frame_id, user=request.user)
+        comment_text = request.POST.get('text', '').strip()
+
+        if not comment_text:
+            return JsonResponse({"error": "comment text cannot be empty"}, status=400)
+
+        comment = Comment.objects.create(
+            user=request.user,
+            pressure_frame=frame,
+            text=comment_text
+        )
+
+        messages.success(request, "Comment added successfully")
+        return redirect('patient_dashboard')
+
+
+class PatientReportView(LoginRequiredMixin, View):
+    """Allow patients to download their medical history report as PDF."""
+    login_url = 'login'
+
+    def get(self, request):
+        if request.user.role != User.ROLE_PATIENT:
+            return HttpResponseForbidden("Patients only")
+
+        # Get all pressure frames for this patient, ordered by timestamp
+        frames = PressureFrame.objects.filter(user=request.user).order_by('-timestamp')
+
+        if not frames.exists():
+            messages.warning(request, "No pressure data available to generate report")
+            return redirect('patient_dashboard')
+
+        # Generate and return PDF
+        return generate_patient_report(request.user, frames)

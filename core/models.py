@@ -2,6 +2,8 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
 
+from sensore.models import SensorFrame
+
 
 PREDEFINED_ZONES = [
     'lower_back', 'left_hip', 'right_hip',
@@ -11,6 +13,9 @@ PREDEFINED_ZONES = [
 
 
 class User(AbstractUser):
+    """Custom User model"""
+    app_label = 'core'
+
     ROLE_ADMIN = "admin"
     ROLE_CLINICIAN = "clinician"
     ROLE_PATIENT = "patient"
@@ -43,9 +48,17 @@ class ClinicianProfile(models.Model):
         return f"ClinicianProfile for {self.user.username}"
 
 
-class Assignment(models.Model):
-    clinician = models.ForeignKey(ClinicianProfile, on_delete=models.CASCADE, related_name="assignments")
-    patient = models.ForeignKey(PatientProfile, on_delete=models.CASCADE, related_name="assignments")
+class ClinicianPatientAssignment(models.Model):
+    clinician = models.ForeignKey(
+        ClinicianProfile,
+        on_delete=models.CASCADE,
+        related_name="clinician_assignments"
+    )
+    patient = models.ForeignKey(
+        PatientProfile,
+        on_delete=models.CASCADE,
+        related_name="patient_assignments"
+    )
     assigned_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -53,6 +66,9 @@ class Assignment(models.Model):
 
     def __str__(self):
         return f"{self.clinician.user.username} -> {self.patient.user.username}"
+
+
+Assignment = ClinicianPatientAssignment
 
 
 class PressureFrame(models.Model):
@@ -81,6 +97,25 @@ class Comment(models.Model):
         return f"Comment by {self.user.username} on {self.pressure_frame}"
 
 
+class SensorData(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        limit_choices_to={'role': User.ROLE_PATIENT},
+        related_name='sensor_data'
+    )
+    timestamp = models.DateTimeField()
+    pressure_value = models.FloatField()
+    sensor_id = models.CharField(blank=True, max_length=100)
+    location = models.CharField(blank=True, max_length=100)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        return f"SensorData for {self.user.username} at {self.timestamp.isoformat()}"
+
+
 class Feedback(models.Model):
     STATUS_PENDING = 'pending'
     STATUS_REVIEWED = 'reviewed'
@@ -92,7 +127,7 @@ class Feedback(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedbacks')
-    pressure_frame = models.ForeignKey(PressureFrame, on_delete=models.CASCADE, related_name='feedbacks')
+    sensor_frame = models.ForeignKey(SensorFrame, on_delete=models.CASCADE, related_name='feedbacks')
     timestamp = models.DateTimeField(default=timezone.now)
     feedback_text = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
@@ -104,7 +139,7 @@ class Feedback(models.Model):
         ordering = ['-timestamp']
 
     def __str__(self):
-        return f"Feedback by {self.user.username} on {self.pressure_frame} ({self.get_status_display()})"
+        return f"Feedback by {self.user.username} on {self.sensor_frame} ({self.get_status_display()})"
 
     def mark_reviewed(self, admin_user):
         self.status = self.STATUS_REVIEWED

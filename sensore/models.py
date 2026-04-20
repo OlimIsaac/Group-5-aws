@@ -1,11 +1,11 @@
+from django.conf import settings
 from django.db import models
-from django.contrib.auth.models import User
 import json
 
 
 class SensorSession(models.Model):
     """A recording session containing multiple frames of pressure data."""
-    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sessions')
     session_date = models.DateField()
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
@@ -92,7 +92,7 @@ class Comment(models.Model):
     ]
 
     session = models.ForeignKey(SensorSession, on_delete=models.CASCADE, related_name='comments')
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pressure_comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pressure_comments')
     author_type = models.CharField(max_length=20, choices=AUTHOR_TYPES, default='patient')
     frame = models.ForeignKey(SensorFrame, on_delete=models.SET_NULL, null=True, blank=True, related_name='comments')
     timestamp_reference = models.DateTimeField()    # The time this comment refers to
@@ -124,7 +124,7 @@ class PressureAlert(models.Model):
     risk_score = models.FloatField()
     acknowledged = models.BooleanField(default=False)
     acknowledged_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='acknowledged_alerts'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='acknowledged_alerts'
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -137,9 +137,9 @@ class PressureAlert(models.Model):
 
 class Report(models.Model):
     """Generated medical history report for a patient."""
-    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports')
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reports')
     generated_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name='generated_reports'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='generated_reports'
     )
     title = models.CharField(max_length=200)
     date_range_start = models.DateField()

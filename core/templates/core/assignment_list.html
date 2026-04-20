@@ -31,8 +31,8 @@
         <tbody>
             {% for assignment in assignments %}
             <tr>
-                <td>{{ assignment.clinician.get_full_name|default:assignment.clinician.username }}</td>
-                <td>{{ assignment.patient.get_full_name|default:assignment.patient.username }}</td>
+                <td>{{ assignment.clinician.user.get_full_name|default:assignment.clinician.user.username }}</td>
+                <td>{{ assignment.patient.user.get_full_name|default:assignment.patient.user.username }}</td>
                 <td>{{ assignment.assigned_at|date:"Y-m-d H:i" }}</td>
                 <td>
                     <a href="{% url 'delete_assignment' assignment.id %}" class="btn-danger btn-sm">Remove</a>

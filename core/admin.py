@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, PatientProfile, ClinicianProfile, ClinicianPatientAssignment, PressureFrame, Comment, SensorData, Feedback
+from .models import User, PatientProfile, ClinicianProfile, Assignment, PressureFrame, Comment, Feedback
 
 
 @admin.register(User)
@@ -18,22 +18,15 @@ class ClinicianProfileAdmin(admin.ModelAdmin):
     list_display = ['user']
 
 
-@admin.register(ClinicianPatientAssignment)
-class ClinicianPatientAssignmentAdmin(admin.ModelAdmin):
+@admin.register(Assignment)
+class AssignmentAdmin(admin.ModelAdmin):
     list_display = ['clinician', 'patient', 'assigned_at']
-
-
-@admin.register(SensorData)
-class SensorDataAdmin(admin.ModelAdmin):
-    list_display = ['user', 'timestamp', 'pressure_value', 'sensor_id']
-    list_filter = ['timestamp', 'sensor_id']
-    search_fields = ['user__username']
 
 
 @admin.register(Feedback)
 class FeedbackAdmin(admin.ModelAdmin):
-    list_display = ['user', 'sensor_data', 'created_at']
-    search_fields = ['comment']
+    list_display = ['user', 'sensor_frame', 'timestamp', 'status']
+    search_fields = ['feedback_text']
 
 
 @admin.register(PressureFrame)

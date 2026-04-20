@@ -2,13 +2,9 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .auth import LoginView, LogoutView
 from . import views
+from sensore.csv_upload import upload_csv
 
 router = DefaultRouter()
-router.register(r'api/users', views.UserViewSet)
-router.register(r'api/assignments', views.ClinicianPatientAssignmentViewSet)
-router.register(r'api/sensor-data', views.SensorDataViewSet)
-router.register(r'api/feedback', views.FeedbackViewSet)
-router.register(r'api/csv-upload', views.CSVUploadViewSet, basename='csv-upload')
 
 urlpatterns = [
     path('api/', include(router.urls)),
@@ -19,9 +15,13 @@ urlpatterns = [
     path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
     path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
     path('patient/api/heatmap-annotation/', views.SaveHeatmapAnnotationView.as_view(), name='save_heatmap_annotation'),
+    path('patient/comment/add/<int:frame_id>/', views.PatientAddCommentView.as_view(), name='add_comment'),
+    path('patient/report/download/', views.PatientReportView.as_view(), name='patient_report_download'),
     path('clinician/', views.ClinicianDashboardView.as_view(), name='clinician_dashboard'),
-    path('clinician/api/dashboard/', views.ClinicianDashboardDataAPIView.as_view(), name='clinician_dashboard_api'),
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
+    path('dashboard/', views.HomeView.as_view(), name='dashboard'),
+    path('upload/csv/', upload_csv, name='upload_csv'),
+    path('manage/patient-csv-upload/', upload_csv, name='admin_patient_csv_upload'),
     
     # Assignment Management
     path('assignments/', views.AssignmentListView.as_view(), name='assignment_list'),
@@ -39,7 +39,6 @@ urlpatterns = [
     
     # Patient Management
     path('manage/patients/', views.PatientListView.as_view(), name='patient_list'),
-    path('manage/patients/upload-csv/', views.AdminPatientCSVUploadView.as_view(), name='admin_patient_csv_upload'),
     
     # Pressure Data Management
     path('manage/pressure-data/', views.PressureDataListView.as_view(), name='pressure_data_list'),
@@ -55,4 +54,7 @@ urlpatterns = [
     path('manage/feedback/', views.FeedbackListView.as_view(), name='feedback_list'),
     path('manage/feedback/<int:feedback_id>/', views.FeedbackDetailView.as_view(), name='feedback_detail'),
     path('manage/feedback/<int:feedback_id>/delete/', views.DeleteFeedbackView.as_view(), name='delete_feedback'),
+    
+    # Patient Report Management
+    path('manage/pain-zone-reports/', views.PainZoneReportListView.as_view(), name='pain_zone_report_list'),
 ]

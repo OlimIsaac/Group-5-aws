@@ -31,9 +31,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.contrib.auth.models import User
+from django.db import transaction
 
-from sensore.models import SensorSession, SensorFrame
-from sensore.utils import analyse_frame, normalise_frame
+from sensore.models import SensorSession, SensorFrame, PressureMetrics, PressureAlert
+from sensore.utils import compute_frame_metrics, normalise_frame
 from sensore.views import get_user_role
 from accounts.models import UserProfile
 
@@ -70,27 +71,37 @@ def parse_sensore_csv(file_obj):
 
     rows = []
     for row in reader:
-        if not row or row[0].strip().startswith('#'):
+        if not row:
             continue
-        try:
-            vals = [int(float(v)) for v in row if v.strip()]
-            if vals:
-                rows.append(vals)
-        except ValueError:
-            continue   # skip header / non-numeric lines
+        if row[0].strip().startswith('#'):
+            continue
+
+        parsed = []
+        for value in row:
+            text_value = value.strip()
+            if not text_value:
+                continue
+            try:
+                parsed.append(int(float(text_value)))
+            except ValueError:
+                parsed = []
+                break
+
+        if parsed:
+            rows.append(parsed)
 
     if not rows:
         return []
 
-    # Assemble raw frames (before normalisation)
     frames_raw = []
+    row_lengths = [len(r) for r in rows]
 
-    if len(rows[0]) >= 1024:
-        # Format B: one frame per row
+    if all(length >= 1024 for length in row_lengths):
+        # Format B: one full frame per row
         for row in rows:
             frames_raw.append(row[:1024])
-    elif len(rows[0]) == 32:
-        # Format A: 32 rows per frame
+    elif all(length >= 32 for length in row_lengths) and len(rows) >= 32:
+        # Format A: 32 rows per frame, using at least the first 32 values of each row
         i = 0
         while i + 32 <= len(rows):
             flat = []
@@ -103,7 +114,9 @@ def parse_sensore_csv(file_obj):
         # Fallback: flatten everything and split into 1024-value chunks
         flat_all = [v for row in rows for v in row]
         for i in range(0, len(flat_all) - 1023, 1024):
-            frames_raw.append(flat_all[i:i + 1024])
+            chunk = flat_all[i:i + 1024]
+            if len(chunk) == 1024:
+                frames_raw.append(chunk)
 
     if not frames_raw:
         return []
@@ -183,7 +196,7 @@ def upload_csv(request):
             notes=notes,
         )
 
-        # Bulk-insert frames at 30 s intervals
+        # Bulk-insert frames and analyse them in a single transaction for speed.
         frame_objs = []
         from datetime import timedelta
         for idx, flat in enumerate(frames_data):
@@ -193,23 +206,55 @@ def upload_csv(request):
                 frame_index=idx,
                 data=json.dumps(flat),
             ))
-        SensorFrame.objects.bulk_create(frame_objs)
 
-        # Run pressure analysis
         analysed = 0
-        for frame in session.frames.all():
-            try:
-                analyse_frame(frame)
-                analysed += 1
-            except Exception:
-                pass
+        alert_objs = []
+        metrics_objs = []
+
+        with transaction.atomic():
+            SensorFrame.objects.bulk_create(frame_objs, batch_size=500)
+            frames = list(session.frames.order_by('frame_index'))
+
+            for frame in frames:
+                try:
+                    metrics_data = compute_frame_metrics(frame)
+                    metrics_objs.append(PressureMetrics(frame=frame, **metrics_data))
+
+                    if metrics_data['risk_level'] in ('high', 'critical'):
+                        alert_objs.append(PressureAlert(
+                            session=session,
+                            frame=frame,
+                            alert_type='critical' if metrics_data['risk_level'] == 'critical' else 'high_ppi',
+                            message=(
+                                f"{metrics_data['risk_level'].capitalize()} pressure detected — "
+                                f"PPI: {metrics_data['peak_pressure_index']:.0f}, "
+                                f"Risk: {metrics_data['risk_score']:.0f}/100. "
+                                "Consider repositioning."
+                            ),
+                            risk_score=metrics_data['risk_score'],
+                        ))
+                    analysed += 1
+                except Exception:
+                    pass
+
+            if metrics_objs:
+                PressureMetrics.objects.bulk_create(metrics_objs, batch_size=500)
+            if alert_objs:
+                PressureAlert.objects.bulk_create(alert_objs, batch_size=200)
 
         messages.success(
             request,
             f'Imported {len(frames_data)} frames from "{csv_file.name}" '
             f'(date: {session_date}). Analysis complete for {analysed} frames.'
         )
-        return redirect('patient_dashboard')
+
+        if role == 'patient':
+            return redirect('sensore_patient_dashboard')
+        if role == 'clinician':
+            return redirect('clinician_dashboard')
+        if role == 'admin':
+            return redirect('admin_dashboard')
+        return redirect('dashboard')
 
     # GET — render upload form
     patients = []

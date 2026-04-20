@@ -57,6 +57,14 @@
 
 <div class="card">
     <div class="d-flex justify-content-between align-items-center">
+        <h3>Patient Pain Reports</h3>
+        <a href="{% url 'pain_zone_report_list' %}" class="btn-secondary">View all reports</a>
+    </div>
+    <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">Review pain zone submissions from your assigned patients.</p>
+</div>
+
+<div class="card">
+    <div class="d-flex justify-content-between align-items-center">
         <h3>Pressure Alerts</h3>
         <span id="alertCount"
               data-high-count="{{ high_pressure_events|length }}"

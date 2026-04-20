@@ -1,3 +1,4 @@
+import csv
 import json
 import io
 from datetime import datetime, timedelta
@@ -13,12 +14,15 @@ from django.db.models import Avg, Max, Count
 from .models import SensorSession, SensorFrame, PressureMetrics, Comment, PressureAlert, Report
 from .utils import analyse_frame, generate_session_report_data, get_risk_level
 from accounts.models import UserProfile
+from core.models import PainZoneReport
 
 
 def get_user_role(user):
     try:
         return user.profile.role
     except Exception:
+        if user.is_superuser or user.is_staff:
+            return 'admin'
         return 'patient'
 
 
@@ -48,10 +52,37 @@ def patient_dashboard(request):
 
     alerts = PressureAlert.objects.filter(session__patient=user, acknowledged=False).order_by('-created_at')[:5]
 
+    report_sessions = []
+    overall_ppis, overall_risks, overall_areas = [], [], []
+    for session in sessions[:5]:
+        report_data = generate_session_report_data(session)
+        if report_data:
+            report_sessions.append({
+                'session': session,
+                'frame_count': report_data['frame_count'],
+                'avg_ppi': report_data['avg_ppi'],
+                'avg_contact_area': report_data['avg_contact_area'],
+                'avg_risk_score': report_data['avg_risk_score'],
+                'peak_risk_level': report_data['peak_risk_level'],
+                'risk_distribution': report_data['risk_distribution'],
+            })
+            overall_ppis.append(report_data['avg_ppi'])
+            overall_risks.append(report_data['avg_risk_score'])
+            overall_areas.append(report_data['avg_contact_area'])
+
+    report_overall = {
+        'avg_ppi': round(sum(overall_ppis) / len(overall_ppis), 1) if overall_ppis else 0,
+        'avg_risk_score': round(sum(overall_risks) / len(overall_risks), 1) if overall_risks else 0,
+        'avg_contact_area': round(sum(overall_areas) / len(overall_areas), 1) if overall_areas else 0,
+        'session_count': len(report_sessions),
+    }
+
     context = {
         'sessions': sessions[:10],
         'selected_session': selected_session,
         'alerts': alerts,
+        'report_sessions': report_sessions,
+        'report_overall': report_overall,
         'role': 'patient',
     }
     return render(request, 'sensore/patient_dashboard.html', context)
@@ -88,9 +119,29 @@ def clinician_dashboard(request):
 
     all_alerts = PressureAlert.objects.filter(acknowledged=False).order_by('-created_at')[:10]
 
+    # Pain report alerts
+    pain_reports = PainZoneReport.objects.filter(user__in=patient_users).order_by('-timestamp')[:10]
+    pain_alerts = []
+    for report in pain_reports:
+        zones_count = len(report.zones.split(',')) if report.zones else 0
+        if zones_count >= 3:
+            risk_level = 'high'
+        elif zones_count >= 1:
+            risk_level = 'average'
+        else:
+            risk_level = 'low'
+        pain_alerts.append({
+            'type': 'pain_report',
+            'patient': report.user,
+            'message': f"Pain reported in {zones_count} zone(s): {report.zones or 'None'}",
+            'timestamp': report.timestamp,
+            'risk_level': risk_level,
+        })
+
     context = {
         'patient_summaries': patient_summaries,
         'all_alerts': all_alerts,
+        'pain_alerts': pain_alerts,
         'role': role,
     }
     return render(request, 'sensore/clinician_dashboard.html', context)
@@ -345,8 +396,9 @@ def patient_report(request, patient_id=None):
     avg_risk = round(sum(all_risks) / len(all_risks), 1) if all_risks else 0
     avg_area = round(sum(all_areas) / len(all_areas), 1) if all_areas else 0
 
-    # Downloadable PDF flag
+    # Downloadable flags
     download = request.GET.get('download') == '1'
+    export_format = request.GET.get('format', '').lower()
 
     context = {
         'patient': patient,
@@ -358,12 +410,52 @@ def patient_report(request, patient_id=None):
         'overall_risk_level': get_risk_level(avg_risk),
         'generated_at': timezone.now(),
         'download': download,
+        'export_format': export_format,
     }
 
+    if export_format == 'csv':
+        return generate_csv_report(context)
     if download:
         return generate_pdf_report(context)
 
     return render(request, 'sensore/report.html', context)
+
+
+def generate_csv_report(context):
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(['Sensore Medical History Report'])
+    writer.writerow(['Patient', context['patient'].get_full_name() or context['patient'].username])
+    writer.writerow(['Username', context['patient'].username])
+    writer.writerow(['Generated', context['generated_at'].strftime('%Y-%m-%d %H:%M UTC')])
+    writer.writerow([])
+
+    writer.writerow(['Overall summary'])
+    writer.writerow(['Average Peak Pressure', f"{context['avg_ppi']} / 4095"])
+    writer.writerow(['Average Contact Area', f"{context['avg_area']}%"])
+    writer.writerow(['Average Risk Score', f"{context['avg_risk']} / 100"])
+    writer.writerow(['High/Critical Risk Events', context['total_high_risk']])
+    writer.writerow(['Overall Risk Level', context['overall_risk_level'].upper()])
+    writer.writerow([])
+
+    writer.writerow(['Session date', 'Frames', 'Avg PPI', 'Contact Area %', 'Avg Risk Score', 'Peak Risk Level'])
+    for ss in context['session_summaries']:
+        s = ss['session']
+        d = ss['data']
+        writer.writerow([
+            s.session_date.isoformat(),
+            d.get('frame_count', 0),
+            d.get('avg_ppi', 0),
+            d.get('avg_contact_area', 0),
+            d.get('avg_risk_score', 0),
+            d.get('peak_risk_level', '').upper(),
+        ])
+
+    response = HttpResponse(output.getvalue(), content_type='text/csv')
+    filename = f"Sensore_Report_{context['patient'].username}_{timezone.now().strftime('%Y%m%d_%H%M')}.csv"
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 def generate_pdf_report(context):

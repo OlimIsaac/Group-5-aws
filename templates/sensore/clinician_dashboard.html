@@ -195,6 +195,44 @@
         </div>
       </div>
     </div>
+
+    <!-- PAIN REPORT ALERTS PANEL -->
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Patient Pain Reports</span>
+          <span class="mono" style="font-size:0.75rem;color:var(--mist)">{{ pain_alerts|length }} recent</span>
+        </div>
+        <div class="card-body" style="padding:0">
+          {% if pain_alerts %}
+          <table class="alert-table">
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Report</th>
+                <th>Risk</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alert in pain_alerts %}
+              <tr>
+                <td style="font-weight:600">{{ alert.patient.get_full_name|default:alert.patient.username }}</td>
+                <td style="color:var(--fog);font-size:0.8rem;max-width:200px">{{ alert.message }}</td>
+                <td><span class="risk-badge {% if alert.risk_level == 'high' %}critical{% elif alert.risk_level == 'average' %}high{% else %}moderate{% endif %}" style="font-size:0.65rem">{{ alert.risk_level|title }}</span></td>
+                <td style="font-size:0.75rem;color:var(--mist);white-space:nowrap">{{ alert.timestamp|date:"d M, H:i" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div style="text-align:center;padding:2rem;color:var(--mist);font-size:0.875rem">
+            No recent pain reports
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- PATIENT DETAIL PANEL -->
@@ -283,8 +321,8 @@ async function openPatientDetail(patientId, name) {
       <div id="clinicianComments" style="color:var(--mist);font-size:0.85rem;padding:0.5rem 0">Select a session to view notes.</div>
     </div>
     <div class="flex gap-1 mt-1">
-      <a href="/report/${patientId}/" class="btn btn-secondary btn-sm" target="_blank">📄 View Full Report</a>
-      <a href="/report/${patientId}/?download=1" class="btn btn-primary btn-sm">⬇ Download PDF</a>
+      <a href="/patient/report/${patientId}/" class="btn btn-secondary btn-sm" target="_blank">📄 View Full Report</a>
+      <a href="/patient/report/${patientId}/?download=1" class="btn btn-primary btn-sm">⬇ Download PDF</a>
     </div>
   `;
 

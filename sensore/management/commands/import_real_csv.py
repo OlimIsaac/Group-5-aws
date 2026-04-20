@@ -23,7 +23,7 @@ import os
 from datetime import datetime, timedelta, date
 
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
+from core.models import User
 from django.utils import timezone
 from django.conf import settings
 
@@ -33,7 +33,7 @@ from sensore.utils import analyse_frame, normalise_frame
 
 
 CSV_FILENAME = 'de0e9b2c_20251013.csv'
-PATIENT_USERNAME = 'de0e9b2c'
+PATIENT_USERNAME = 'patient1'
 SESSION_DATE = date(2025, 10, 13)
 
 

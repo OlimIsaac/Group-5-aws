@@ -29,8 +29,8 @@
             <select name="patient_id" id="id_patient" required>
                 <option value="">-- Choose a patient --</option>
                 {% for patient in patients %}
-                <option value="{{ patient.id }}">
-                    {{ patient.get_full_name|default:patient.username }} ({{ patient.email }})
+                <option value="{{ patient.user.id }}">
+                    {{ patient.user.get_full_name|default:patient.user.username }} ({{ patient.user.email }})
                 </option>
                 {% endfor %}
             </select>

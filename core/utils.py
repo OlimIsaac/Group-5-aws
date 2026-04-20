@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import pandas as pd
 
 from django.utils import timezone
 from .models import PressureFrame, User
@@ -13,6 +12,8 @@ MIN_CLUSTER_SIZE = 10
 
 def ingest_csv_for_user(user: User, csv_path: str):
     """Process a CSV containing timestamped 32x32 matrices for a given user."""
+    import pandas as pd
+    
     df = pd.read_csv(csv_path)
     # expect columns: timestamp, and then 1024 values or row-major representation
     for _, row in df.iterrows():
