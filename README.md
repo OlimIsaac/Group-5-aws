@@ -16,20 +16,48 @@ Sensore is a Django pressure-monitoring web app for patients and clinicians. It 
 
 ## Local Setup
 
-1. Create and activate a virtual environment.
-2. Install dependencies.
-3. Run migrations.
-4. Load sample data.
-5. Start the development server.
+Run one setup command once after cloning:
+
+macOS / Linux:
 
 ```bash
-python3 -m venv venv
+chmod +x setup.sh
+./setup.sh
+```
+
+Windows (Command Prompt):
+
+```bat
+setup.bat
+```
+
+What the setup script does:
+
+- Finds the project directory safely (no relative-path issues)
+- Checks Python version (requires 3.9+)
+- Creates `venv` if needed
+- Installs dependencies from `requirements.txt`
+- Runs `migrate` and `check`
+- Loads sample data and optionally imports real CSV data if present
+- Writes `.setup_complete` so reruns do not repeat full setup
+
+Start the app after setup:
+
+macOS / Linux:
+
+```bash
 source venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py load_sample_data
 python manage.py runserver
 ```
+
+Windows:
+
+```bat
+venv\Scripts\activate
+python manage.py runserver
+```
+
+If you intentionally want to run full setup again, delete `.setup_complete` and rerun the setup script.
 
 ## Environment Variables
 
