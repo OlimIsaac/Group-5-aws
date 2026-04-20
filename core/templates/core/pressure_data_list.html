@@ -16,7 +16,7 @@
             <option value="">All Patients</option>
             {% for patient in patients %}
             <option value="{{ patient.id }}" {% if patient.id|stringformat:"s" == selected_patient %}selected{% endif %}>
-                {{ patient.user.get_full_name|default:patient.user.username }}
+                {{ patient.get_full_name|default:patient.username }}
             </option>
             {% endfor %}
         </select>

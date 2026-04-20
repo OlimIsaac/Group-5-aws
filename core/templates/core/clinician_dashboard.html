@@ -1,94 +1,756 @@
-{% extends 'core/base.html' %}
+{% extends "base.html" %}
 {% load static %}
-{% block title %}Clinician Dashboard{% endblock %}
+{% block title %}Clinician Dashboard — Sensore{% endblock %}
+{% block nav_clin %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── CLINICIAN DASHBOARD LAYOUT ── */
+  .clin-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .clin-stat {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 1.1rem;
+    text-align: center;
+    backdrop-filter: blur(8px);
+  }
+  .clin-stat-num {
+    font-size: 1.8rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--teal);
+    line-height: 1.1;
+  }
+  .clin-stat-num.danger { color: var(--red); }
+  .clin-stat-num.success { color: var(--green); }
+  .clin-stat-lbl {
+    font-size: 0.7rem;
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 4px;
+  }
+
+  /* ── WORKSPACE GRID ── */
+  .clin-workspace {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  /* ── SIDEBAR ── */
+  .clin-sidebar {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+    position: sticky;
+    top: 70px;
+  }
+  .clin-sidebar-head {
+    padding: 1rem 1rem 0.5rem;
+    border-bottom: 1px solid rgba(0,212,200,0.08);
+  }
+  .clin-sidebar-head h3 {
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+  .clin-search {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    color: var(--white);
+    font-family: var(--font-main);
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .clin-search:focus { border-color: var(--teal); background: var(--input-focus-bg); }
+  .clin-search::placeholder { color: var(--mist); }
+  .clin-filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .clin-filter-select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    color: var(--pale);
+    font-family: var(--font-main);
+    font-size: 0.72rem;
+    cursor: pointer;
+    outline: none;
+  }
+  .clin-filter-select:focus { border-color: var(--teal); }
+  .clin-list-count {
+    font-size: 0.68rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+    margin-top: 6px;
+  }
+
+  /* ── PATIENT LIST ── */
+  .clin-patient-list {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    padding: 0.5rem;
+  }
+  .clin-patient-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: background var(--transition), border-color var(--transition);
+    border: 1px solid transparent;
+    margin-bottom: 2px;
+  }
+  .clin-patient-item:hover {
+    background: var(--interactive-hover-bg);
+    border-color: rgba(0,212,200,0.15);
+  }
+  .clin-patient-item.active {
+    background: rgba(0,212,200,0.08);
+    border-color: rgba(0,212,200,0.3);
+  }
+  .clin-p-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--white);
+  }
+  .clin-p-email {
+    font-size: 0.7rem;
+    color: var(--mist);
+    word-break: break-word;
+  }
+  .clin-p-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+  }
+
+  /* ── DETAIL PANE ── */
+  .clin-detail-empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--mist);
+    font-size: 0.9rem;
+  }
+  .clin-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .clin-detail-header h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--white);
+    margin: 0;
+  }
+  .clin-detail-header p {
+    color: var(--mist);
+    font-size: 0.8rem;
+    margin: 2px 0 0;
+  }
+  .clin-detail-status {
+    font-size: 0.72rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+    margin-bottom: 0.75rem;
+    min-height: 16px;
+  }
+  .clin-detail-status.saved { color: var(--green); }
+  .clin-detail-status.error { color: var(--red); }
+
+  /* ── HEATMAP + METRICS ROW ── */
+  .clin-viz-row {
+    display: grid;
+    grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    margin-bottom: 1.25rem;
+  }
+  .clin-heatmap-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    backdrop-filter: blur(8px);
+  }
+  .clin-heatmap-card .card-label {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.75rem;
+  }
+  .clin-heatmap-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    background: rgba(10,22,40,0.5);
+    border: 1px solid rgba(0,212,200,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    aspect-ratio: 1;
+  }
+  .clin-heatmap-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+  .clin-heatmap-wrap .patient-annotation {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .clin-heatmap-note {
+    font-size: 0.75rem;
+    color: var(--mist);
+    margin-top: 0.5rem;
+    text-align: center;
+  }
+  .clin-heatmap-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 420px;
+    margin: 0 auto;
+    background: rgba(10,22,40,0.3);
+    border: 1px dashed rgba(90,122,154,0.3);
+    border-radius: 8px;
+    color: var(--mist);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 1rem;
+  }
+
+  /* ── METRICS PANEL ── */
+  .clin-metrics-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .clin-metrics-card .card-label {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .clin-metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .clin-metric {
+    background: var(--surface-soft);
+    border: 1px solid var(--surface-soft-border);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.75rem;
+  }
+  .clin-metric-label {
+    font-size: 0.68rem;
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+  }
+  .clin-metric-value {
+    font-size: 1.3rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.2;
+  }
+  .clin-metric-value.low { color: var(--green); }
+  .clin-metric-value.moderate { color: var(--amber); }
+  .clin-metric-value.high { color: var(--red); }
+  .clin-metric-value.critical { color: #a78bfa; }
+  .clin-latest-ts {
+    font-size: 0.72rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+  }
+  .clin-trend-wrap {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+  #clinicianTrendChart {
+    width: 100% !important;
+    max-height: 200px;
+  }
+
+  /* ── TABS ── */
+  .clin-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: 0;
+  }
+  .clin-tab {
+    padding: 0.6rem 1rem;
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    color: var(--mist);
+    cursor: pointer;
+    border: none;
+    background: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid transparent;
+    transition: color var(--transition), border-color var(--transition);
+  }
+  .clin-tab:hover { color: var(--pale); }
+  .clin-tab.active {
+    color: var(--teal);
+    border-bottom-color: var(--teal);
+  }
+  .clin-tab-panel {
+    display: none;
+    padding: 1rem;
+  }
+  .clin-tab-panel.active { display: block; }
+
+  /* ── BOTTOM CARD ── */
+  .clin-bottom-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+
+  /* ── FRAMES TABLE ── */
+  .clin-frames-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .clin-frames-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+  .clin-frames-table td {
+    padding: 7px 12px;
+    font-size: 0.82rem;
+    color: var(--pale);
+    border-bottom: 1px solid var(--line-faint);
+  }
+  .clin-frames-table tbody tr:hover { background: var(--row-hover); }
+  .clin-frames-table tbody tr.is-selected {
+    background: rgba(0,212,200,0.10);
+    box-shadow: inset 3px 0 0 rgba(0,212,200,0.65);
+  }
+  .clin-frames-table tbody tr.clin-frame-row { cursor: pointer; }
+  .clin-frames-table tbody tr:last-child td { border-bottom: none; }
+  .clin-frames-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+  }
+
+  /* ── COMMENTS ── */
+  .clin-comment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .clin-comment-item {
+    background: var(--surface-soft);
+    border: 1px solid var(--surface-soft-border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+  }
+  .clin-comment-meta {
+    font-size: 0.72rem;
+    color: var(--mist);
+    margin-bottom: 4px;
+  }
+  .clin-comment-text {
+    font-size: 0.82rem;
+    color: var(--pale);
+    line-height: 1.45;
+  }
+  .clin-comment-reply-existing {
+    font-size: 0.75rem;
+    color: var(--amber);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(245,158,11,0.2);
+  }
+  .clin-reply-form {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    align-items: center;
+  }
+  .clin-reply-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: var(--white);
+    font-size: 0.78rem;
+    font-family: var(--font-main);
+    outline: none;
+  }
+  .clin-reply-input:focus { border-color: var(--teal); }
+
+  /* ── REPORT ACTIONS ── */
+  .clin-report-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* ── RISK PILLS (inline in sidebar) ── */
+  .risk-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 0.62rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .risk-pill.risk-low      { color: var(--green);  background: rgba(34,197,94,0.12);  border: 1px solid rgba(34,197,94,0.25); }
+  .risk-pill.risk-moderate  { color: var(--amber);  background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25); }
+  .risk-pill.risk-high,
+  .risk-pill.risk-critical  { color: var(--red);    background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.25); }
+  .risk-pill.risk-none      { color: var(--mist);   background: var(--surface-soft);    border: 1px solid var(--surface-soft-border); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 960px) {
+    .clin-workspace {
+      grid-template-columns: 1fr;
+    }
+    .clin-sidebar {
+      position: static;
+    }
+    .clin-patient-list {
+      max-height: 300px;
+    }
+    .clin-viz-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
 
 {% block content %}
-<div class="dashboard-header">
-    <h2>Clinician Dashboard</h2>
-    <p>Manage your assigned patients</p>
-</div>
+<div class="page-wrap">
 
-{% if error %}
-<div class="alert alert-danger">
+  <div class="page-header">
+    <h1>Clinician Dashboard</h1>
+    <p>Monitor patient pressure data, risk levels, and session history</p>
+  </div>
+
+  {% if error %}
+  <div class="alert-strip high" style="margin-bottom:1rem">
     <strong>Error:</strong> {{ error }}
-</div>
-{% endif %}
+  </div>
+  {% endif %}
 
-<div class="card">
-    <h3>Assigned Patients</h3>
-    {% if patients_data %}
-        <div class="clinician-patient-grid">
-            {% for pd in patients_data %}
-            <div class="clinician-patient-card card">
-                <h4>{{ pd.assignment.patient.user.first_name|default:pd.assignment.patient.user.username }}</h4>
-                <p class="text-secondary" style="font-size:0.85rem;margin-bottom:0.5rem;">{{ pd.assignment.patient.user.email }}</p>
+  {% if patients_data %}
+  {{ initial_detail|json_script:"clinicianInitialDetailData" }}
 
-                <div class="heatmap-wrapper heatmap-sm" data-patient-id="{{ pd.assignment.patient.id }}">
-                    <canvas class="patient-heatmap" width="192" height="192"
-                            data-matrix="{{ pd.matrix_json }}"
-                            data-cells="{{ pd.cells_json }}"></canvas>
-                    <canvas class="patient-annotation" width="192" height="192"></canvas>
-                </div>
+  <!-- ── SUMMARY STATS ── -->
+  <div class="clin-stats">
+    <div class="clin-stat">
+      <div class="clin-stat-num">{{ assigned_total }}</div>
+      <div class="clin-stat-lbl">Assigned Patients</div>
+    </div>
+    <div class="clin-stat">
+      <div class="clin-stat-num danger">{{ high_pressure_total }}</div>
+      <div class="clin-stat-lbl">High Pressure Now</div>
+    </div>
+    <div class="clin-stat">
+      <div class="clin-stat-num success" id="lowRiskCount">—</div>
+      <div class="clin-stat-lbl">Low Risk</div>
+    </div>
+  </div>
 
-                {% if pd.latest_annotation %}
-                    <p class="annotation-note">
-                        <strong>Pain marks:</strong> {{ pd.latest_annotation.cells|length }} cell{{ pd.latest_annotation.cells|length|pluralize }}
-                        &mdash; reported {{ pd.latest_annotation.timestamp|date:"N j, H:i" }}
-                    </p>
-                    {% if pd.latest_annotation.note %}
-                        <p class="annotation-note-text">&ldquo;{{ pd.latest_annotation.note }}&rdquo;</p>
-                    {% endif %}
-                {% else %}
-                    <p class="annotation-note text-secondary">No pain marks reported yet</p>
-                {% endif %}
+  <!-- ── WORKSPACE ── -->
+    <div class="clin-workspace"
+      data-detail-api-template="{% url 'clinician_patient_detail_api' 0 %}"
+      data-frame-detail-api-template="{% url 'clinician_patient_frame_detail_api' 0 0 %}">
 
-                {% if not pd.latest_frame %}
-                    <p class="text-secondary" style="font-size:0.8rem;">No pressure data available</p>
-                {% endif %}
-            </div>
-            {% endfor %}
+    <!-- ── SIDEBAR ── -->
+    <div class="clin-sidebar">
+      <div class="clin-sidebar-head">
+        <h3>My Patients</h3>
+        <label for="clinicianPatientSearch" class="sr-only">Search patients</label>
+        <input id="clinicianPatientSearch" type="search" class="clin-search" placeholder="Search name, username, email…">
+        <div class="clin-filter-row">
+          <label for="clinicianRiskFilter" class="sr-only">Filter by risk</label>
+          <select id="clinicianRiskFilter" class="clin-filter-select" title="Filter by risk">
+            <option value="all">All risks</option>
+            <option value="critical">Critical only</option>
+            <option value="high">High and above</option>
+            <option value="moderate">Moderate+</option>
+            <option value="low">Low only</option>
+            <option value="none">No data</option>
+          </select>
+          <label for="clinicianSortOrder" class="sr-only">Sort patients</label>
+          <select id="clinicianSortOrder" class="clin-filter-select" title="Sort patients">
+            <option value="risk">Sort: Risk ↑</option>
+            <option value="recent">Sort: Recent</option>
+            <option value="name">Sort: Name</option>
+          </select>
         </div>
-    {% else %}
-        <p>No patients assigned yet.</p>
-    {% endif %}
-</div>
+        <p id="clinicianListCount" class="clin-list-count"></p>
+      </div>
+      <div id="clinicianPatientList" class="clin-patient-list">
+        {% for pd in patients_data %}
+        <a href="?patient={{ pd.patient_id }}"
+           class="clin-patient-item {% if pd.item_class == 'clinician-patient-item active' %}active{% endif %}"
+           data-patient-id="{{ pd.patient_id }}"
+           data-patient-name="{{ pd.patient_name }}"
+           data-patient-username="{{ pd.patient_username }}"
+           data-patient-email="{{ pd.patient_email }}"
+           data-risk-level="{{ pd.latest_risk_level|default:'none' }}"
+           data-latest-ts="{% if pd.latest_timestamp %}{{ pd.latest_timestamp|date:'c' }}{% endif %}"
+           data-report-url="{{ pd.report_url }}">
+          <span class="clin-p-name">{{ pd.patient_name }}</span>
+          <span class="clin-p-email">{{ pd.patient_username }} · {{ pd.patient_email }}</span>
+          <span class="clin-p-meta">
+            {% if pd.has_data %}
+              <span class="risk-pill risk-{{ pd.latest_risk_level|default:'low' }}">
+                {{ pd.latest_risk_level|default:'low'|upper }}
+              </span>
+              <span style="color:var(--fog);font-size:0.7rem">PPI {{ pd.latest_ppi|default:'--' }}</span>
+              <span style="color:var(--mist);font-size:0.68rem">
+                {% if pd.latest_timestamp %}{{ pd.latest_timestamp|date:'M j, H:i' }}{% endif %}
+              </span>
+            {% else %}
+              <span class="risk-pill risk-none">NO DATA</span>
+            {% endif %}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
 
-<div class="card">
-    <h3>Flagged Events</h3>
-    <div id="flaggedEvents">No flagged events</div>
+    <!-- ── DETAIL PANE ── -->
+    <div class="clin-detail">
+      <div class="clin-detail-header">
+        <div>
+          <h2 id="clinicianDetailName">{{ initial_detail.patient.name|default:'Select a patient' }}</h2>
+          <p id="clinicianDetailEmail">{{ initial_detail.patient.email|default:'' }}</p>
+        </div>
+        <div class="clin-report-actions">
+          <a id="clinicianReportLink" href="{{ initial_detail.report_url|default:'#' }}" class="btn btn-secondary btn-sm">📄 Full Report</a>
+          <a id="clinicianReportCsvLink" href="{% if initial_detail.report_url %}{{ initial_detail.report_url }}?download=1{% else %}#{% endif %}" class="btn btn-primary btn-sm">⬇ Download CSV</a>
+        </div>
+      </div>
+
+      <p id="clinicianDetailStatus" class="clin-detail-status saved">Patient details loaded.</p>
+
+      <!-- ── HEATMAP + METRICS ── -->
+      <div class="clin-viz-row">
+        <div class="clin-heatmap-card">
+          <div class="card-label">Pressure Heatmap</div>
+          <div class="clin-heatmap-wrap" id="clinicianHeatmapContainer">
+            <canvas id="clinicianHeatmapCanvas" class="patient-heatmap" width="420" height="420"></canvas>
+            <canvas id="clinicianAnnotationCanvas" class="patient-annotation" width="420" height="420"></canvas>
+          </div>
+          <p id="clinicianAnnotationInfo" class="clin-heatmap-note">
+            {% if initial_detail.annotation.cells %}
+              Pain marks: {{ initial_detail.annotation.cells|length }} cells.
+            {% else %}
+              No pain marks submitted.
+            {% endif %}
+          </p>
+        </div>
+
+        <div class="clin-metrics-card">
+          <div class="card-label">Latest Metrics</div>
+          <div class="clin-metrics-grid">
+            <div class="clin-metric">
+              <div class="clin-metric-label">PPI</div>
+              <div id="clinicianPpi" class="clin-metric-value">
+                {% if initial_detail.latest.peak_pressure_index != None %}{{ initial_detail.latest.peak_pressure_index|floatformat:1 }}{% else %}--{% endif %}
+              </div>
+            </div>
+            <div class="clin-metric">
+              <div class="clin-metric-label">Contact %</div>
+              <div id="clinicianContact" class="clin-metric-value">
+                {% if initial_detail.latest.contact_area_percentage != None %}{{ initial_detail.latest.contact_area_percentage|floatformat:1 }}%{% else %}--{% endif %}
+              </div>
+            </div>
+            <div class="clin-metric">
+              <div class="clin-metric-label">Risk Score</div>
+              <div id="clinicianRiskScore" class="clin-metric-value">
+                {% if initial_detail.latest.risk_score != None %}{{ initial_detail.latest.risk_score|floatformat:1 }}{% else %}--{% endif %}
+              </div>
+            </div>
+            <div class="clin-metric">
+              <div class="clin-metric-label">Risk Level</div>
+              <div id="clinicianRiskLevel" class="clin-metric-value">
+                {% if initial_detail.latest.risk_level %}{{ initial_detail.latest.risk_level|upper }}{% else %}--{% endif %}
+              </div>
+            </div>
+          </div>
+          <p id="clinicianLatestTimestamp" class="clin-latest-ts">Latest frame: {{ initial_detail.latest.timestamp|default:'n/a' }}</p>
+          <p class="clin-latest-ts">Tip: click any Recent Frames row or trend point to inspect that frame's heatmap.</p>
+          <div class="clin-trend-wrap">
+            <canvas id="clinicianTrendChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TABBED BOTTOM SECTION ── -->
+      <div class="clin-bottom-card">
+        <div class="clin-tabs">
+          <button class="clin-tab active" data-tab="frames" onclick="switchTab('frames')">Recent Frames</button>
+          <button class="clin-tab" data-tab="comments" onclick="switchTab('comments')">Patient Comments</button>
+        </div>
+
+        <!-- FRAMES TAB -->
+        <div class="clin-tab-panel active" id="tabFrames">
+          <div class="clin-frames-scroll">
+            <table class="clin-frames-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>PPI</th>
+                  <th>Contact %</th>
+                  <th>Risk</th>
+                  <th>Level</th>
+                  <th>Comments</th>
+                </tr>
+              </thead>
+              <tbody id="clinicianFrameRows">
+                {% if initial_detail.recent_frames %}
+                  {% for row in initial_detail.recent_frames %}
+                  <tr class="clin-frame-row" data-frame-id="{{ row.id }}">
+                    <td>{{ row.label }}</td>
+                    <td>{{ row.peak_pressure_index|floatformat:1 }}</td>
+                    <td>{{ row.contact_area_percentage|floatformat:1 }}%</td>
+                    <td>{{ row.risk_score|floatformat:1 }}</td>
+                    <td>{{ row.risk_level|upper }}</td>
+                    <td>{{ row.comment_count }}</td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="6" style="color:var(--mist);text-align:center;padding:2rem">No pressure frames available.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- COMMENTS TAB -->
+        <div class="clin-tab-panel" id="tabComments">
+          <div id="clinicianCommentList" class="clin-comment-list">
+            {% if initial_detail.recent_comments %}
+              {% for comment in initial_detail.recent_comments|slice:":20" %}
+              <div class="clin-comment-item" data-comment-id="{{ comment.id }}">
+                <div class="clin-comment-meta">Patient note at {{ comment.frame_timestamp }}</div>
+                <div class="clin-comment-text">{{ comment.text }}</div>
+                {% if comment.clinician_reply %}
+                  <div class="clin-comment-reply-existing"><strong>Clinician reply:</strong> {{ comment.clinician_reply }}</div>
+                {% endif %}
+                <div class="clin-reply-form">
+                  <input type="text" class="clin-reply-input clinician-reply-input" placeholder="Write advice or follow-up…">
+                  <button type="button" class="btn btn-primary btn-sm clinician-reply-btn" data-comment-id="{{ comment.id }}">Reply</button>
+                </div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div style="color:var(--mist);text-align:center;padding:2rem;font-size:0.85rem">No comments from this patient yet.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {% else %}
+  <div class="clin-detail-empty">
+    <div style="font-size:2.5rem;margin-bottom:0.75rem;opacity:0.4">📋</div>
+    <h3 style="color:var(--white);font-size:1rem;margin-bottom:0.4rem">No Patients Assigned</h3>
+    <p>No patients have been assigned to your account yet. Contact your administrator.</p>
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_scripts %}
 <script src="{% static 'js/heatmap.js' %}"></script>
 <script src="{% static 'js/clinician_dashboard.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.clinician-patient-card').forEach(function (card) {
-        var heatmapCanvas = card.querySelector('.patient-heatmap');
-        var annotCanvas = card.querySelector('.patient-annotation');
-        if (!heatmapCanvas) return;
+/* ── Tab Switching ── */
+function switchTab(tabId) {
+  document.querySelectorAll('.clin-tab').forEach(function(t) {
+    t.classList.toggle('active', t.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.clin-tab-panel').forEach(function(p) {
+    p.classList.toggle('active', p.id === 'tab' + tabId.charAt(0).toUpperCase() + tabId.slice(1));
+  });
+}
 
-        var matrix = null;
-        try { matrix = JSON.parse(heatmapCanvas.dataset.matrix); } catch (e) { console.error('Error parsing matrix', e); }
-        var cells = [];
-        try { cells = JSON.parse(heatmapCanvas.dataset.cells); } catch (e) { console.error('Error parsing cells', e); }
-
-        if (matrix && Array.isArray(matrix)) {
-            try {
-                drawHeatmapOnCanvas(heatmapCanvas, matrix);
-            } catch (e) {
-                console.error('Error drawing heatmap', e);
-            }
-        }
-        if (cells && cells.length > 0) {
-            try {
-                drawAnnotationOnCanvas(annotCanvas, cells);
-            } catch (e) {
-                console.error('Error drawing annotation', e);
-            }
-        }
-    });
+/* ── Low Risk Count ── */
+window.addEventListener('load', function() {
+  var items = document.querySelectorAll('.clin-patient-item');
+  var low = 0;
+  items.forEach(function(item) {
+    var risk = (item.dataset.riskLevel || '').toLowerCase();
+    if (risk === 'low') low++;
+  });
+  var el = document.getElementById('lowRiskCount');
+  if (el) el.textContent = low;
 });
 </script>
 {% endblock %}

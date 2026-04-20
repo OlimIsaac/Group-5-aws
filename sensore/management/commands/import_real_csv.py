@@ -20,17 +20,18 @@ What this command does:
 """
 import json
 import os
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
-from django.utils import timezone
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from accounts.models import UserProfile
-from sensore.models import SensorSession, SensorFrame, PressureAlert
-from sensore.utils import analyse_frame, normalise_frame
+from sensore.models import SensorFrame, SensorSession
+from sensore.utils import analyse_session_frames, normalise_frame
 
+User = get_user_model()
 
 CSV_FILENAME = 'de0e9b2c_20251013.csv'
 PATIENT_USERNAME = 'de0e9b2c'
@@ -129,7 +130,9 @@ class Command(BaseCommand):
         )
         clin_user.set_password('clinic123')
         clin_user.save()
-        UserProfile.objects.get_or_create(user=clin_user, defaults={'role': 'clinician'})
+        clin_profile, _ = UserProfile.objects.get_or_create(user=clin_user)
+        clin_profile.role = 'clinician'
+        clin_profile.save(update_fields=['role'])
 
         # ── Create / fetch patient ──────────────────────────────────────
         patient, _ = User.objects.get_or_create(
@@ -142,13 +145,13 @@ class Command(BaseCommand):
         )
         patient.set_password('patient123')
         patient.save()
-        UserProfile.objects.get_or_create(user=patient, defaults={
-            'role':                 'patient',
-            'patient_id':           PATIENT_USERNAME.upper(),
-            'assigned_clinician':   clin_user,
-            'date_of_birth':        date(1970, 1, 1),
-            'medical_notes':        f'Real hardware session imported from {CSV_FILENAME}',
-        })
+        patient_profile, _ = UserProfile.objects.get_or_create(user=patient)
+        patient_profile.role = 'patient'
+        patient_profile.patient_id = PATIENT_USERNAME.upper()
+        patient_profile.assigned_clinician = clin_user
+        patient_profile.date_of_birth = date(1970, 1, 1)
+        patient_profile.medical_notes = f'Real hardware session imported from {CSV_FILENAME}'
+        patient_profile.save()
         self.stdout.write(f'  Patient user: {PATIENT_USERNAME}  (password: patient123)')
 
         # ── Create session ──────────────────────────────────────────────
@@ -202,42 +205,10 @@ class Command(BaseCommand):
 
         # ── Analyse every frame ─────────────────────────────────────────
         self.stdout.write('  Running pressure analysis (this may take a minute) …')
-        batch = options['batch_size']
         all_frames = list(session.frames.order_by('frame_index'))
-        alerts_created = 0
-        high_risk = 0
+        analysed_frames, alerts_created = analyse_session_frames(session, create_alerts=True)
 
-        for i, frame in enumerate(all_frames):
-            try:
-                metrics = analyse_frame(frame)
-
-                if metrics.risk_level in ('high', 'critical'):
-                    high_risk += 1
-                    alert, new = PressureAlert.objects.get_or_create(
-                        session=session,
-                        frame=frame,
-                        defaults={
-                            'alert_type': (
-                                'critical' if metrics.risk_level == 'critical' else 'high_ppi'
-                            ),
-                            'message': (
-                                f"{metrics.risk_level.capitalize()} pressure detected — "
-                                f"PPI: {metrics.peak_pressure_index:.0f}, "
-                                f"Risk: {metrics.risk_score:.0f}/100. "
-                                "Consider repositioning."
-                            ),
-                            'risk_score': metrics.risk_score,
-                        }
-                    )
-                    if new:
-                        alerts_created += 1
-
-            except Exception as e:
-                self.stderr.write(f'  Frame {i} analysis error: {e}')
-
-            if (i + 1) % batch == 0:
-                pct = (i + 1) / len(all_frames) * 100
-                self.stdout.write(f'    … {i+1}/{len(all_frames)} frames ({pct:.0f}%)')
+        high_risk = session.alerts.filter(alert_type__in=['high_ppi', 'critical']).count()
 
         # ── Done ────────────────────────────────────────────────────────
         self.stdout.write(self.style.SUCCESS(
@@ -246,6 +217,7 @@ class Command(BaseCommand):
             f'    Session date:  {SESSION_DATE}\n'
             f'    Frames:        {len(all_frames)}\n'
             f'    Duration:      ~{len(all_frames) * 30 // 60} minutes\n'
+            f'    Analysed frames: {analysed_frames}\n'
             f'    High-risk frames: {high_risk}\n'
             f'    Alerts created:   {alerts_created}\n'
         ))

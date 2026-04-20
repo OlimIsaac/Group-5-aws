@@ -1,11 +1,12 @@
-from django.db import models
-from django.contrib.auth.models import User
 import json
+
+from django.conf import settings
+from django.db import models
 
 
 class SensorSession(models.Model):
     """A recording session containing multiple frames of pressure data."""
-    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sessions')
     session_date = models.DateField()
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
@@ -69,6 +70,12 @@ class PressureMetrics(models.Model):
     contact_area_percent = models.FloatField()       # % of pixels above lower threshold
     average_pressure = models.FloatField()
     asymmetry_score = models.FloatField(default=0.0)  # Left/right imbalance 0-100
+    pressure_variability = models.FloatField(default=0.0)  # Coefficient of variation of in-contact pressure
+    pressure_concentration = models.FloatField(default=0.0)  # Localised load intensity index
+    movement_index = models.FloatField(default=0.0)  # Frame-to-frame movement intensity 0-100
+    sustained_load_index = models.FloatField(default=0.0)  # Persistence of load over time 0-100
+    center_of_pressure_x = models.FloatField(null=True, blank=True)  # 0-31 x-axis
+    center_of_pressure_y = models.FloatField(null=True, blank=True)  # 0-31 y-axis
     risk_level = models.CharField(max_length=20, choices=RISK_LEVELS, default='low')
     risk_score = models.FloatField(default=0.0)      # 0-100 composite score
     hot_zones = models.TextField(default='[]')       # JSON: list of {x, y, value} high-pressure pixels
@@ -92,11 +99,12 @@ class Comment(models.Model):
     ]
 
     session = models.ForeignKey(SensorSession, on_delete=models.CASCADE, related_name='comments')
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='pressure_comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='pressure_comments')
     author_type = models.CharField(max_length=20, choices=AUTHOR_TYPES, default='patient')
     frame = models.ForeignKey(SensorFrame, on_delete=models.SET_NULL, null=True, blank=True, related_name='comments')
     timestamp_reference = models.DateTimeField()    # The time this comment refers to
     text = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
     is_reply = models.BooleanField(default=False)
     reply_to = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -124,7 +132,7 @@ class PressureAlert(models.Model):
     risk_score = models.FloatField()
     acknowledged = models.BooleanField(default=False)
     acknowledged_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='acknowledged_alerts'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='acknowledged_alerts'
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -137,9 +145,9 @@ class PressureAlert(models.Model):
 
 class Report(models.Model):
     """Generated medical history report for a patient."""
-    patient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reports')
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reports')
     generated_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, related_name='generated_reports'
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='generated_reports'
     )
     title = models.CharField(max_length=200)
     date_range_start = models.DateField()

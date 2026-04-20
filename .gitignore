@@ -36,11 +36,12 @@ venv.bak/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+legacy_core.sqlite3
+legacy_core.sqlite3-journal
 /media
 /staticfiles
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo

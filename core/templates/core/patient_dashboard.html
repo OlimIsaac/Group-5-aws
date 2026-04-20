@@ -14,9 +14,17 @@
   {% endfor %}
 {% endif %}
 
-<div class="patient-layout">
+<div
+    id="patientDashboardApp"
+    class="patient-layout"
+    data-status-api="{% url 'patient_status_api' %}"
+    data-live-api="{% url 'patient_live_heatmap_api' %}"
+    data-frame-detail-api-template="{% url 'patient_frame_detail_api' 0 %}"
+    data-comments-api="{% url 'patient_comments_api' %}"
+    data-annotation-api="{% url 'save_heatmap_annotation' %}">
     <div class="col-left card">
         <h3>Live Heatmap</h3>
+        <p id="liveStatus" class="live-status connecting">Live stream connecting</p>
         <div class="heatmap-wrapper">
             <canvas id="heatmapCanvas" width="320" height="320"></canvas>
             <canvas id="annotationCanvas" width="320" height="320" title="Click or drag to mark painful areas"></canvas>
@@ -46,11 +54,50 @@
         <div class="card">
             <h3>Pressure Over Time</h3>
             <div class="time-filters">
-                <button class="btn btn-outline time-btn active" data-hours="1">Last Hour</button>
-                <button class="btn btn-outline time-btn" data-hours="6">Last 6 Hours</button>
-                <button class="btn btn-outline time-btn" data-hours="24">Last 24 Hours</button>
+                <button class="btn btn-outline time-btn" data-hours="1" type="button">Last Hour</button>
+                <button class="btn btn-outline time-btn" data-hours="6" type="button">Last 6 Hours</button>
+                <button class="btn btn-outline time-btn active" data-hours="24" type="button">Last 24 Hours</button>
             </div>
             <canvas id="pressureChart" height="200"></canvas>
+        </div>
+
+        <div class="card">
+            <h3>What Your Data Means</h3>
+            <p id="simpleExplanation" class="simple-explanation">Waiting for pressure data...</p>
+        </div>
+
+        <div class="card">
+            <h3>Comment on a Specific Time</h3>
+            <div class="comment-form">
+                <label for="commentFrameSelect">Choose frame time</label>
+                <select id="commentFrameSelect" class="form-input">
+                    {% if initial_recent_frames %}
+                        {% for frame in initial_recent_frames %}
+                            <option value="{{ frame.id }}">{{ frame.timestamp|date:"Y-m-d H:i:s" }}</option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="">No frame available</option>
+                    {% endif %}
+                </select>
+                <p id="framePreviewStatus" class="annotation-status">Heatmap follows selected frame record.</p>
+                <label for="commentText">Your note</label>
+                <textarea id="commentText" class="form-input" rows="3" placeholder="Example: shifted left due to discomfort"></textarea>
+                <button id="saveCommentBtn" class="btn btn-primary btn-sm" type="button">Save Time-Linked Comment</button>
+                <p id="commentStatus" class="annotation-status"></p>
+            </div>
+            <div class="comment-list-wrap">
+                <h4>Recent Comments</h4>
+                <div id="patientCommentList" class="comment-list">No comments yet.</div>
+            </div>
+        </div>
+
+        <div class="card report-card">
+            <h3>Medical History Report</h3>
+            <p>View your pressure history and download a copy for your records.</p>
+            <div class="report-actions">
+                <a href="{% url 'patient_report' %}" class="btn btn-secondary btn-sm">View Report</a>
+                <a href="{% url 'patient_report' %}?download=1" class="btn btn-primary btn-sm">Download CSV</a>
+            </div>
         </div>
 
         <div class="card pain-zone-card">
@@ -66,8 +113,7 @@
                 <div class="zone-checkboxes">
                     {% for value, label in form.fields.zones.choices %}
                         <label class="zone-label">
-                            <input type="checkbox" name="zones" value="{{ value }}"
-                                {% if value in form.zones.value %}checked{% endif %}>
+                            <input type="checkbox" name="zones" value="{{ value }}">
                             {{ label }}
                         </label>
                     {% endfor %}

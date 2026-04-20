@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import SensorSession, SensorFrame, PressureMetrics, Comment, PressureAlert, Report
+
+from .models import (Comment, PressureAlert, PressureMetrics, Report,
+                     SensorFrame, SensorSession)
+
 
 @admin.register(SensorSession)
 class SensorSessionAdmin(admin.ModelAdmin):
@@ -8,12 +11,22 @@ class SensorSessionAdmin(admin.ModelAdmin):
 
 @admin.register(PressureMetrics)
 class PressureMetricsAdmin(admin.ModelAdmin):
-    list_display = ['frame', 'peak_pressure_index', 'contact_area_percent', 'risk_level', 'risk_score']
+    list_display = [
+        'frame',
+        'peak_pressure_index',
+        'contact_area_percent',
+        'asymmetry_score',
+        'pressure_concentration',
+        'movement_index',
+        'risk_level',
+        'risk_score',
+    ]
     list_filter = ['risk_level']
 
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
-    list_display = ['author', 'session', 'author_type', 'created_at']
+    list_display = ['author', 'session', 'author_type', 'created_at', 'is_reply']
+    search_fields = ['text', 'author__username', 'session__patient__username']
 
 @admin.register(PressureAlert)
 class AlertAdmin(admin.ModelAdmin):
