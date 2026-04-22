@@ -139,14 +139,21 @@ class PatientStatusAPIView(LoginRequiredMixin, View):
         high_pressure_frames = frames.filter(high_pressure_flag=True)
 
         if frames.exists():
-            num_buckets = hours + 1
-            labels = [f"Hour {i}" for i in range(num_buckets)]
+            num_buckets = hours
+            # Build labels oldest→newest (e.g. "14:00", "15:00", ... "now")
+            labels = []
             counts = [0] * num_buckets
+            for i in range(num_buckets - 1, -1, -1):
+                bucket_time = now - timedelta(hours=i)
+                labels.append(bucket_time.strftime("%H:%M"))
 
             for frame in high_pressure_frames:
                 elapsed = now - frame.timestamp
-                bucket_idx = min(int(elapsed.total_seconds() // 3600), num_buckets - 1)
-                counts[bucket_idx] += 1
+                # bucket 0 = oldest, bucket (num_buckets-1) = most recent
+                raw_idx = int(elapsed.total_seconds() // 3600)
+                bucket_idx = num_buckets - 1 - raw_idx
+                if 0 <= bucket_idx < num_buckets:
+                    counts[bucket_idx] += 1
         else:
             labels = []
             counts = []

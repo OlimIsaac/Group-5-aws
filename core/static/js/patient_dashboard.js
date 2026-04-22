@@ -255,7 +255,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         initChart();
         initAnnotation();
-        loadData(1);
+        loadData(24);
         setInterval(function () { loadData(currentHours); }, 8000);
 
         document.querySelectorAll('.time-btn').forEach(function (btn) {
