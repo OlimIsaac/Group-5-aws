@@ -8,7 +8,10 @@ function drawHeatmapOnCanvas(canvas, matrix) {
         for (var c = 0; c < 32; c++) {
             var value = matrix[r][c];
             var norm = value / 4095;
-            ctx.fillStyle = 'rgba(' + Math.floor(255 * norm) + ',0,' + Math.floor(255 * (1 - norm)) + ',1)';
+            var red = Math.round(10 + 150 * norm);
+            var green = Math.round(14 + 80 * norm);
+            var blue = Math.round(22 + 55 * norm);
+            ctx.fillStyle = 'rgb(' + red + ',' + green + ',' + blue + ')';
             ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
         }
     }

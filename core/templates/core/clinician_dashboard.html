@@ -49,13 +49,33 @@
                     </div>
                 </details>
 
+                <div class="demo-live">
+                    <div class="demo-header">
+                        <span class="demo-title">Live</span>
+                        <span class="demo-status">Live stream</span>
+                    </div>
+                    <div class="demo-grid">
+                        <div class="demo-panel demo-panel-heatmap">
+                            <p class="demo-label">Pressure heatmap</p>
+                            <canvas class="demo-heatmap" width="192" height="192"></canvas>
+                        </div>
+                        <div class="demo-panel demo-panel-graph">
+                            <p class="demo-label">Peak vs low pressure periods</p>
+                            <canvas class="demo-graph" width="320" height="160"></canvas>
+                            <div class="demo-legend">
+                                <span class="demo-legend-item"><span class="legend-swatch legend-peak"></span>Peak</span>
+                                <span class="demo-legend-item"><span class="legend-swatch legend-low"></span>Low</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="heatmap-wrapper heatmap-sm">
                     <canvas class="patient-heatmap" width="192" height="192"
                             data-matrix="{{ pd.matrix_json }}"
                             data-cells="{{ pd.cells_json }}"></canvas>
                     <canvas class="patient-annotation" width="192" height="192"></canvas>
                 </div>
-
                 {% if pd.latest_annotation %}
                     <p class="annotation-note">
                         <strong>Pain marks:</strong> {{ pd.latest_annotation.cells|length }} cell{{ pd.latest_annotation.cells|length|pluralize }}
@@ -64,11 +84,6 @@
                     {% if pd.latest_annotation.note %}
                         <p class="annotation-note-text">&ldquo;{{ pd.latest_annotation.note }}&rdquo;</p>
                     {% endif %}
-                {% else %}
-                    <p class="annotation-note text-secondary empty-note">
-                        <span class="status-dot status-dot-muted"></span>
-                        No pain marks reported yet
-                    </p>
                 {% endif %}
 
                 <div style="margin-top:0.6rem;">
@@ -341,7 +356,61 @@
             {% endfor %}
         </div>
     {% else %}
-        <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">No comments from assigned patients.</p>
+        <p style="margin-top:0.75rem;color:#666;font-size:0.9rem;">Sample comments shown until patients submit feedback.</p>
+        <div class="comment-grid" style="margin-top:1rem;">
+            <div class="comment-card">
+                <div class="comment-card-header">
+                    <div class="comment-meta">
+                        <span class="comment-patient">Jordan R.</span>
+                        <span class="comment-time">Apr 23, 09:15</span>
+                    </div>
+                    <div class="comment-badges">
+                        <span class="comment-status replied">Replied</span>
+                        <span class="comment-frame">Frame #118</span>
+                    </div>
+                </div>
+                <p class="comment-text-full">Pressure feels higher on the right side after long sessions. I used a cushion and it helped.</p>
+                <div class="comment-reply">
+                    <label class="comment-reply-label">Clinician reply</label>
+                    <p class="comment-text-full" style="margin:0;">Great call. Keep using the cushion and take a short break every 45 minutes.</p>
+                </div>
+            </div>
+            <div class="comment-card">
+                <div class="comment-card-header">
+                    <div class="comment-meta">
+                        <span class="comment-patient">Casey M.</span>
+                        <span class="comment-time">Apr 23, 11:40</span>
+                    </div>
+                    <div class="comment-badges">
+                        <span class="comment-status pending">Needs reply</span>
+                        <span class="comment-frame">Frame #132</span>
+                    </div>
+                </div>
+                <p class="comment-text-full">Noticed a spike after midday. The left side feels a little numb.</p>
+                <div class="comment-reply">
+                    <label class="comment-reply-label" for="reply-demo-2">Clinician reply</label>
+                    <textarea id="reply-demo-2" rows="3" placeholder="Write a reply..."></textarea>
+                    <button type="button" class="btn-secondary">Save Reply</button>
+                </div>
+            </div>
+            <div class="comment-card">
+                <div class="comment-card-header">
+                    <div class="comment-meta">
+                        <span class="comment-patient">Avery K.</span>
+                        <span class="comment-time">Apr 23, 13:05</span>
+                    </div>
+                    <div class="comment-badges">
+                        <span class="comment-status replied">Replied</span>
+                        <span class="comment-frame">Frame #141</span>
+                    </div>
+                </div>
+                <p class="comment-text-full">Low pressure in the center today. Sitting posture feels better than yesterday.</p>
+                <div class="comment-reply">
+                    <label class="comment-reply-label">Clinician reply</label>
+                    <p class="comment-text-full" style="margin:0;">Nice improvement. Keep the same posture and check back tomorrow.</p>
+                </div>
+            </div>
+        </div>
     {% endif %}
 </div>
 {% endblock %}
@@ -538,6 +607,87 @@
 .profile-icon-id { background: linear-gradient(135deg, #c4b5fd, #7c3aed); }
 .profile-icon-mail { background: linear-gradient(135deg, #5eead4, #0f766e); }
 .profile-icon-date { background: linear-gradient(135deg, #fcd34d, #f59e0b); }
+.demo-live {
+    margin-top: 0.2rem;
+    margin-bottom: 0.2rem;
+    border: 1px dashed #cbd5f5;
+    border-radius: 12px;
+    padding: 0.55rem 0.75rem 0.65rem;
+    background: #f8fafc;
+}
+.clinician-patient-card .heatmap-wrapper {
+    margin-top: 0.2rem;
+}
+.demo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.1rem;
+}
+.demo-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.demo-status {
+    font-size: 0.7rem;
+    color: #0284c7;
+    background: #e0f2fe;
+    padding: 2px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+}
+.demo-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.demo-panel {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 0.35rem 0.75rem 0.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.demo-panel canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+.demo-label {
+    margin: 0 0 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.demo-legend {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: #475569;
+}
+.demo-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+.legend-peak { background: #ef4444; }
+.legend-low { background: #0ea5e9; }
 .compare-icon {
     font-size: 0.8rem;
     line-height: 1;
@@ -649,7 +799,127 @@
 </style>
 <script src="{% static 'js/heatmap.js' %}"></script>
 <script>
+function clampNumber(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function buildDemoSeries() {
+    var state = {
+        tick: 0,
+        peakSeries: [],
+        lowSeries: []
+    };
+
+    for (var i = 0; i < 30; i++) {
+        var peak = 70 + Math.sin(i / 4) * 12 + (Math.random() * 8 - 4);
+        var low = 24 + Math.sin(i / 5 + 1.1) * 8 + (Math.random() * 6 - 3);
+        state.peakSeries.push(clampNumber(peak, 45, 95));
+        state.lowSeries.push(clampNumber(low, 5, 55));
+    }
+
+    return state;
+}
+
+function generateDemoMatrix(tick) {
+    var matrix = [];
+    var centerAX = 10 + Math.sin(tick / 5) * 0.9;
+    var centerAY = 23 + Math.cos(tick / 7) * 1.1;
+    var centerBX = 21 + Math.cos(tick / 6) * 0.9;
+    var centerBY = 23 + Math.sin(tick / 8) * 1.1;
+    var centerCX = 16;
+    var centerCY = 23;
+
+    for (var r = 0; r < 32; r++) {
+        var row = [];
+        for (var c = 0; c < 32; c++) {
+            var dxA = c - centerAX;
+            var dyA = r - centerAY;
+            var dxB = c - centerBX;
+            var dyB = r - centerBY;
+            var distA = (dxA * dxA) / 1.2 + (dyA * dyA) / 0.85;
+            var distB = (dxB * dxB) / 1.2 + (dyB * dyB) / 0.85;
+            var dxC = c - centerCX;
+            var dyC = r - centerCY;
+            var distC = (dxC * dxC) / 1.1 + (dyC * dyC) / 0.7;
+            var lobeA = 2500 * Math.exp(-distA / 55);
+            var lobeB = 2500 * Math.exp(-distB / 55);
+            var notch = 700 * Math.exp(-distC / 45);
+            var base = 220 + Math.random() * 90;
+            var value = lobeA + lobeB - notch + base;
+            row.push(clampNumber(Math.round(value), 0, 4095));
+        }
+        matrix.push(row);
+    }
+
+    return matrix;
+}
+
+function drawPressureGraph(canvas, peakSeries, lowSeries) {
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width;
+    var h = canvas.height;
+    var padding = { left: 28, right: 8, top: 8, bottom: 14 };
+    var innerW = w - padding.left - padding.right;
+    var innerH = h - padding.top - padding.bottom;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#64748b';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i <= 4; i++) {
+        var value = 100 - i * 25;
+        var y = padding.top + (innerH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + innerW, y);
+        ctx.stroke();
+        ctx.fillText(String(value), padding.left - 4, y);
+    }
+
+    function plotSeries(series, color) {
+        if (!series || series.length < 2) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        series.forEach(function (value, index) {
+            var x = padding.left + (index / (series.length - 1)) * innerW;
+            var yPos = padding.top + innerH - (value / 100) * innerH;
+            if (index === 0) {
+                ctx.moveTo(x, yPos);
+            } else {
+                ctx.lineTo(x, yPos);
+            }
+        });
+        ctx.stroke();
+
+        var last = series[series.length - 1];
+        var lastY = padding.top + innerH - (last / 100) * innerH;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(padding.left + innerW, lastY, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = color;
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(Math.round(last)), padding.left + innerW + 4, lastY);
+    }
+
+    plotSeries(peakSeries, '#ef4444');
+    plotSeries(lowSeries, '#0ea5e9');
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+    var demoTargets = [];
+
     document.querySelectorAll('.clinician-patient-card').forEach(function (card) {
         var heatmapCanvas = card.querySelector('.patient-heatmap');
         var annotCanvas = card.querySelector('.patient-annotation');
@@ -666,7 +936,45 @@ document.addEventListener('DOMContentLoaded', function () {
         if (cells && cells.length > 0) {
             drawAnnotationOnCanvas(annotCanvas, cells);
         }
+
+        var demoHeatmap = card.querySelector('.demo-heatmap');
+        var demoGraph = card.querySelector('.demo-graph');
+        if (demoHeatmap && demoGraph) {
+            demoTargets.push({
+                heatmap: demoHeatmap,
+                graph: demoGraph,
+                state: buildDemoSeries()
+            });
+        }
     });
+
+    if (demoTargets.length > 0) {
+        var demoTick = function () {
+            demoTargets.forEach(function (target) {
+                target.state.tick += 1;
+                var matrix = generateDemoMatrix(target.state.tick);
+                drawHeatmapOnCanvas(target.heatmap, matrix);
+
+                var drift = Math.sin(target.state.tick / 3) * 4;
+                var peak = 70 + drift + (Math.random() * 10 - 5);
+                var low = 24 + Math.cos(target.state.tick / 4) * 6 + (Math.random() * 6 - 3);
+
+                target.state.peakSeries.push(clampNumber(peak, 45, 95));
+                target.state.lowSeries.push(clampNumber(low, 5, 55));
+                if (target.state.peakSeries.length > 30) {
+                    target.state.peakSeries.shift();
+                }
+                if (target.state.lowSeries.length > 30) {
+                    target.state.lowSeries.shift();
+                }
+
+                drawPressureGraph(target.graph, target.state.peakSeries, target.state.lowSeries);
+            });
+        };
+
+        demoTick();
+        setInterval(demoTick, 1200);
+    }
 
     var filterButtons = document.querySelectorAll('.alert-filter-btn');
     var alertTables = document.querySelectorAll('.alert-table');
