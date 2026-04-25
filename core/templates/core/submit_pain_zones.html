@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+
+{% block title %}Submit Pain Zones{% endblock %}
+
+{% block content %}
+  <h2>Submit Pain Zones</h2>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div>
+      {{ form.zones.label_tag }}<br />
+      {{ form.zones }}
+      {% if form.zones.errors %}
+        <div class="error">{{ form.zones.errors }}</div>
+      {% endif %}
+    </div>
+    <div>
+      {{ form.note.label_tag }}<br />
+      {{ form.note }}
+      {% if form.note.errors %}
+        <div class="error">{{ form.note.errors }}</div>
+      {% endif %}
+    </div>
+
+    <button type="submit">Submit</button>
+  </form>
+{% endblock %}

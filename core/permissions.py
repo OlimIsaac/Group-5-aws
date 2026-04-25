@@ -1,29 +1,31 @@
-from django.core.exceptions import PermissionDenied
-from functools import wraps
+from rest_framework.permissions import BasePermission
+from .models import User, ClinicianPatientAssignment
 
 
-def role_required(*roles):
-    """Decorator to restrict view access to users with specific roles."""
-
-    def decorator(view_func):
-        @wraps(view_func)
-        def _wrapped(request, *args, **kwargs):
-            if not request.user.is_authenticated or request.user.role not in roles:
-                raise PermissionDenied
-            return view_func(request, *args, **kwargs)
-
-        return _wrapped
-
-    return decorator
+class IsAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == User.ROLE_ADMIN
 
 
-def admin_required(view_func):
-    return role_required('admin')(view_func)
+class IsClinician(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == User.ROLE_CLINICIAN
 
 
-def clinician_required(view_func):
-    return role_required('clinician')(view_func)
+class IsPatient(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == User.ROLE_PATIENT
 
 
-def patient_required(view_func):
-    return role_required('patient')(view_func)
+class IsOwnerOrAssignedClinician(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if request.user.role == User.ROLE_ADMIN:
+            return True
+        if request.user.role == User.ROLE_PATIENT and obj.user == request.user:
+            return True
+        if request.user.role == User.ROLE_CLINICIAN:
+            # Check if clinician is assigned to the patient
+            return ClinicianPatientAssignment.objects.filter(
+                clinician=request.user, patient=obj.user
+            ).exists()
+        return False

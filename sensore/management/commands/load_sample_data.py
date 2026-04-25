@@ -3,17 +3,20 @@ Management command to populate the database with realistic sample sensor data.
 Creates 5 patients, 1 clinician, 1 admin, with 3 sessions each.
 """
 import json
-import random
 import math
-from datetime import datetime, timedelta, date
-from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
-from django.utils import timezone
+import random
+from datetime import date, datetime, timedelta
+
 import numpy as np
+from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from accounts.models import UserProfile
-from sensore.models import SensorSession, SensorFrame, PressureAlert
-from sensore.utils import analyse_frame
+from sensore.models import SensorFrame, SensorSession
+from sensore.utils import analyse_session_frames
+
+User = get_user_model()
 
 
 class Command(BaseCommand):
@@ -27,14 +30,18 @@ class Command(BaseCommand):
             defaults={'first_name': 'System', 'last_name': 'Admin', 'is_staff': True, 'is_superuser': True})
         admin_user.set_password('admin123')
         admin_user.save()
-        UserProfile.objects.get_or_create(user=admin_user, defaults={'role': 'admin'})
+        admin_profile, _ = UserProfile.objects.get_or_create(user=admin_user)
+        admin_profile.role = 'admin'
+        admin_profile.save(update_fields=['role'])
 
         # Clinician
         clin_user, _ = User.objects.get_or_create(username='dr_smith',
             defaults={'first_name': 'Dr. Sarah', 'last_name': 'Smith', 'email': 'sarah.smith@hospital.org'})
         clin_user.set_password('clinic123')
         clin_user.save()
-        UserProfile.objects.get_or_create(user=clin_user, defaults={'role': 'clinician'})
+        clin_profile, _ = UserProfile.objects.get_or_create(user=clin_user)
+        clin_profile.role = 'clinician'
+        clin_profile.save(update_fields=['role'])
 
         # Patients
         patient_data = [
@@ -51,12 +58,12 @@ class Command(BaseCommand):
                 defaults={'first_name': fn, 'last_name': ln, 'email': f'{pid}@sensore.test'})
             u.set_password('patient123')
             u.save()
-            UserProfile.objects.get_or_create(user=u, defaults={
-                'role': 'patient',
-                'patient_id': pid.upper(),
-                'assigned_clinician': clin_user,
-                'date_of_birth': date(birth_year, random.randint(1, 12), random.randint(1, 28)),
-            })
+            patient_profile, _ = UserProfile.objects.get_or_create(user=u)
+            patient_profile.role = 'patient'
+            patient_profile.patient_id = pid.upper()
+            patient_profile.assigned_clinician = clin_user
+            patient_profile.date_of_birth = date(birth_year, random.randint(1, 12), random.randint(1, 28))
+            patient_profile.save()
             patients.append(u)
             self.stdout.write(f"  Created patient: {u.get_full_name()} ({pid})")
 
@@ -116,23 +123,7 @@ class Command(BaseCommand):
 
         SensorFrame.objects.bulk_create(frames_to_create, ignore_conflicts=True)
 
-        # Run analysis on each frame
-        for frame in session.frames.all():
-            metrics = analyse_frame(frame)
-
-            # Create alert if high risk
-            if metrics.risk_level in ('high', 'critical') and random.random() < 0.5:
-                PressureAlert.objects.get_or_create(
-                    session=session,
-                    frame=frame,
-                    defaults={
-                        'alert_type': 'high_ppi' if metrics.peak_pressure_index > 2800 else 'sustained',
-                        'message': f"{'Critical' if metrics.risk_level == 'critical' else 'High'} pressure detected "
-                                   f"(PPI: {metrics.peak_pressure_index:.0f}, Risk: {metrics.risk_score:.0f}/100). "
-                                   f"Consider repositioning.",
-                        'risk_score': metrics.risk_score,
-                    }
-                )
+        analyse_session_frames(session, create_alerts=True)
 
     def _generate_sitting_pattern(self):
         """Generate a base 32x32 sitting pressure pattern (two pressure zones)."""

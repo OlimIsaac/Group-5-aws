@@ -22,20 +22,22 @@ Filename convention (auto-parsed for session date):
 import csv
 import io
 import json
-import re
 import os
-from datetime import datetime, date
+import re
+from datetime import date, datetime
 
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.contrib.auth.models import User
 
-from sensore.models import SensorSession, SensorFrame
-from sensore.utils import analyse_frame, normalise_frame
-from sensore.views import get_user_role
 from accounts.models import UserProfile
+from sensore.models import SensorFrame, SensorSession
+from sensore.utils import analyse_session_frames, normalise_frame
+from sensore.views import get_user_role, user_can_access_patient
+
+User = get_user_model()
 
 
 # ── FILENAME HINT PARSER ─────────────────────────────────────────────────────
@@ -128,7 +130,12 @@ def upload_csv(request):
         pid = request.POST.get('patient_id')
         if pid:
             try:
-                target_patient = User.objects.get(id=int(pid))
+                candidate = User.objects.get(id=int(pid))
+                if user_can_access_patient(user, candidate):
+                    target_patient = candidate
+                else:
+                    messages.error(request, 'You do not have permission to upload for that patient.')
+                    return redirect('upload_csv')
             except (User.DoesNotExist, ValueError):
                 pass
 
@@ -195,19 +202,13 @@ def upload_csv(request):
             ))
         SensorFrame.objects.bulk_create(frame_objs)
 
-        # Run pressure analysis
-        analysed = 0
-        for frame in session.frames.all():
-            try:
-                analyse_frame(frame)
-                analysed += 1
-            except Exception:
-                pass
+        analysed, alerts_created = analyse_session_frames(session, create_alerts=True)
 
         messages.success(
             request,
             f'Imported {len(frames_data)} frames from "{csv_file.name}" '
-            f'(date: {session_date}). Analysis complete for {analysed} frames.'
+            f'(date: {session_date}). Analysis complete for {analysed} frames '
+            f'with {alerts_created} alerts generated.'
         )
         return redirect('patient_dashboard')
 
@@ -215,7 +216,12 @@ def upload_csv(request):
     patients = []
     if role in ('clinician', 'admin'):
         try:
-            patients = list(UserProfile.objects.filter(role='patient').select_related('user'))
+            if role == 'admin':
+                patients = list(UserProfile.objects.filter(role='patient').select_related('user'))
+            else:
+                patients = list(
+                    UserProfile.objects.filter(role='patient', assigned_clinician=user).select_related('user')
+                )
         except Exception:
             pass
 

@@ -3,9 +3,9 @@ from .models import (
     User,
     PatientProfile,
     ClinicianProfile,
-    Assignment,
-    PressureFrame,
-    Comment,
+    ClinicianPatientAssignment,
+    SensorData,
+    Feedback,
 )
 
 
@@ -31,22 +31,27 @@ class ClinicianProfileSerializer(serializers.ModelSerializer):
         fields = ['id', 'user']
 
 
-class AssignmentSerializer(serializers.ModelSerializer):
-    clinician = ClinicianProfileSerializer()
-    patient = PatientProfileSerializer()
+class ClinicianPatientAssignmentSerializer(serializers.ModelSerializer):
+    clinician = UserSerializer()
+    patient = UserSerializer()
 
     class Meta:
-        model = Assignment
+        model = ClinicianPatientAssignment
         fields = ['id', 'clinician', 'patient', 'assigned_at']
 
 
-class PressureFrameSerializer(serializers.ModelSerializer):
+class SensorDataSerializer(serializers.ModelSerializer):
     class Meta:
-        model = PressureFrame
-        fields = ['id', 'user', 'timestamp', 'raw_matrix', 'peak_pressure_index', 'contact_area_percentage', 'high_pressure_flag']
+        model = SensorData
+        fields = ['id', 'user', 'timestamp', 'pressure_value', 'sensor_id', 'location']
 
 
-class CommentSerializer(serializers.ModelSerializer):
+class FeedbackSerializer(serializers.ModelSerializer):
+    reviewed_by = UserSerializer(read_only=True)
+
     class Meta:
-        model = Comment
-        fields = ['id', 'user', 'pressure_frame', 'timestamp', 'text', 'clinician_reply']
+        model = Feedback
+        fields = [
+            'id', 'user', 'sensor_data', 'comment', 'status',
+            'admin_notes', 'reviewed_at', 'reviewed_by', 'created_at'
+        ]

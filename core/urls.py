@@ -1,16 +1,36 @@
-from django.urls import path, include
-from .auth import LoginView, LogoutView
+from django.urls import include, path
+from django.views.generic import RedirectView
+from rest_framework.routers import DefaultRouter
+
 from . import views
+from .auth import LoginView, LogoutView
+
+router = DefaultRouter()
+router.register(r'api/users', views.UserViewSet)
+router.register(r'api/assignments', views.ClinicianPatientAssignmentViewSet)
+router.register(r'api/sensor-data', views.SensorDataViewSet)
+router.register(r'api/feedback', views.FeedbackViewSet)
+router.register(r'api/csv-upload', views.CSVUploadViewSet, basename='csv-upload')
 
 urlpatterns = [
+    path('api/', include(router.urls)),
     path('', views.HomeView.as_view(), name='home'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('patient/', views.PatientDashboardView.as_view(), name='patient_dashboard'),
     path('patient/pain-zones/', views.SubmitPainZonesView.as_view(), name='submit_pain_zones'),
     path('patient/api/status/', views.PatientStatusAPIView.as_view(), name='patient_status_api'),
+    path('patient/api/live/', views.PatientLiveHeatmapAPIView.as_view(), name='patient_live_heatmap_api'),
+    path('patient/api/frames/<int:frame_id>/', views.PatientFrameDetailAPIView.as_view(), name='patient_frame_detail_api'),
+    path('patient/api/comments/', views.PatientCommentsAPIView.as_view(), name='patient_comments_api'),
     path('patient/api/heatmap-annotation/', views.SaveHeatmapAnnotationView.as_view(), name='save_heatmap_annotation'),
+    path('patient/report/', views.PatientReportView.as_view(), name='patient_report'),
     path('clinician/', views.ClinicianDashboardView.as_view(), name='clinician_dashboard'),
+    path('clinician/api/dashboard/', views.ClinicianDashboardDataAPIView.as_view(), name='clinician_dashboard_api'),
+    path('clinician/api/patient/<int:patient_id>/', views.ClinicianPatientDetailAPIView.as_view(), name='clinician_patient_detail_api'),
+    path('clinician/api/patient/<int:patient_id>/frames/<int:frame_id>/', views.ClinicianPatientFrameDetailAPIView.as_view(), name='clinician_patient_frame_detail_api'),
+    path('clinician/api/comments/<int:comment_id>/reply/', views.ClinicianCommentReplyAPIView.as_view(), name='clinician_comment_reply_api'),
+    path('clinician/patient/<int:patient_id>/report/', views.ClinicianPatientReportView.as_view(), name='clinician_patient_report'),
     path('admin-dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
     
     # Assignment Management
@@ -29,6 +49,7 @@ urlpatterns = [
     
     # Patient Management
     path('manage/patients/', views.PatientListView.as_view(), name='patient_list'),
+    path('manage/patients/upload-csv/', views.AdminPatientCSVUploadView.as_view(), name='admin_patient_csv_upload'),
     
     # Pressure Data Management
     path('manage/pressure-data/', views.PressureDataListView.as_view(), name='pressure_data_list'),
@@ -45,4 +66,8 @@ urlpatterns = [
     path('manage/feedback/', views.FeedbackListView.as_view(), name='feedback_list'),
     path('manage/feedback/<int:feedback_id>/', views.FeedbackDetailView.as_view(), name='feedback_detail'),
     path('manage/feedback/<int:feedback_id>/delete/', views.DeleteFeedbackView.as_view(), name='delete_feedback'),
+
+    # Aliases required by templates/base.html navigation
+    path('dashboard/', RedirectView.as_view(pattern_name='home', permanent=False), name='dashboard'),
+    path('upload/', views.AdminPatientCSVUploadView.as_view(), name='upload_csv'),
 ]

@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load static %}
 {% block title %}Pressure Data Detail - Sensore{% endblock %}
 
 {% block content %}
@@ -46,7 +47,7 @@
         <h3>Pressure Matrix (Preview)</h3>
         <div class="matrix-preview">
             <p class="matrix-info">Raw Matrix Data:</p>
-            <canvas id="heatmapCanvas" width="300" height="300" class="heatmap-canvas"></canvas>
+            <canvas id="heatmapCanvas" width="640" height="640" class="heatmap-canvas"></canvas>
             <p class="matrix-info">Matrix size: 32x32 • Values: 0-4095</p>
         </div>
     </div>
@@ -68,8 +69,6 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-{% load static %}
-
 .detail-header {
     display: flex;
     justify-content: space-between;
@@ -160,6 +159,8 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 1.5rem;
     background-color: #f9f9f9;
     border-radius: 8px;
+    max-width: 760px;
+    margin: 0 auto;
 }
 
 .matrix-info {
@@ -172,7 +173,11 @@ document.addEventListener('DOMContentLoaded', function() {
     border: 2px solid #ddd;
     border-radius: 4px;
     margin: 1rem 0;
-    max-width: 100%;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: pixelated;
 }
 
 .action-buttons {

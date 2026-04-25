@@ -211,7 +211,7 @@
       <div>
         <div class="metric-label mb-1" style="margin-bottom:0.5rem">Patient Notes ({{ comments.count }})</div>
         {% for c in comments|slice:":5" %}
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:0.6rem 0.85rem;margin-bottom:0.5rem;font-size:0.83rem">
+        <div style="background:var(--surface-soft);border:1px solid var(--surface-soft-border);border-radius:6px;padding:0.6rem 0.85rem;margin-bottom:0.5rem;font-size:0.83rem">
           <div style="display:flex;justify-content:space-between;margin-bottom:3px">
             <strong style="color:{% if c.author_type == 'clinician' %}var(--amber){% else %}var(--teal){% endif %}">
               {{ c.author.get_full_name|default:c.author.username }} ({{ c.author_type }})

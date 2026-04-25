@@ -1,0 +1,229 @@
+{% extends 'core/base.html' %}
+{% block title %}Upload Patient CSV Data - Sensore{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h2>Upload Patient Sensor Data</h2>
+    <a href="{% url 'admin_dashboard' %}" class="btn-secondary">← Back to Dashboard</a>
+</div>
+
+{% if messages %}
+<div class="messages">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>Upload CSV Data for a Patient</h3>
+    <p>Select a patient and upload up to 5 CSV files containing sensor data.</p>
+
+    <form method="post" enctype="multipart/form-data" style="margin-top: 2rem;" id="csv-upload-form">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="id_patient">Select Patient:</label>
+            <select name="patient_id" id="id_patient" required>
+                <option value="">-- Choose a patient --</option>
+                {% for patient in patients %}
+                <option value="{{ patient.id }}">
+                    {{ patient.get_full_name|default:patient.username }} ({{ patient.email }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="file-sections">
+            <div class="file-section">
+                <h4>CSV File 1</h4>
+                <div class="form-group">
+                    <label>Select CSV File:</label>
+                    <input type="file" name="file" accept=".csv" required class="file-input">
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="button" id="add-file" class="btn-secondary">Add Another CSV</button>
+            <button type="submit" class="btn-primary" id="submit-btn">Upload CSVs</button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileSections = document.getElementById('file-sections');
+    const addButton = document.getElementById('add-file');
+    const submitBtn = document.getElementById('submit-btn');
+    let fileCount = 1;
+    const maxFiles = 5;
+    
+    addButton.addEventListener('click', function() {
+        if (fileCount >= maxFiles) {
+            alert('Maximum of 5 CSV files allowed.');
+            return;
+        }
+        
+        fileCount++;
+        const newSection = document.createElement('div');
+        newSection.className = 'file-section';
+        newSection.innerHTML = `
+            <h4>CSV File ${fileCount}</h4>
+            <div class="form-group">
+                <label>Select CSV File:</label>
+                <input type="file" name="file" accept=".csv" class="file-input">
+            </div>
+            <button type="button" class="remove-file btn-danger">Remove</button>
+        `;
+        
+        fileSections.appendChild(newSection);
+        
+        // Add remove functionality
+        newSection.querySelector('.remove-file').addEventListener('click', function() {
+            fileSections.removeChild(newSection);
+            fileCount--;
+            updateHeaders();
+        });
+        
+        updateHeaders();
+    });
+    
+    function updateHeaders() {
+        const sections = fileSections.querySelectorAll('.file-section');
+        sections.forEach((section, index) => {
+            section.querySelector('h4').textContent = `CSV File ${index + 1}`;
+        });
+    }
+    
+    // Validate form on submit - ensure at least one file is selected
+    document.getElementById('csv-upload-form').addEventListener('submit', function(e) {
+        const fileInputs = document.querySelectorAll('.file-input');
+        const hasFile = Array.from(fileInputs).some(input => input.files && input.files.length > 0);
+        
+        if (!hasFile) {
+            e.preventDefault();
+            alert('Please select at least one CSV file to upload.');
+            return false;
+        }
+        
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+    });
+});
+</script>
+
+<style>
+.file-section {
+    border: 1px solid #ddd;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+    background: #f9f9f9;
+}
+
+.file-section h4 {
+    margin-top: 0;
+    color: #333;
+}
+
+.form-actions {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.btn-secondary, .btn-primary, .btn-danger {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-primary {
+    background: #00d4c8;
+    color: white;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-primary:hover {
+    background: #00a8a0;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.form-group input[type="file"],
+.form-group select {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+    line-height: 1.6;
+}
+
+.messages {
+    margin-bottom: 1.5rem;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+</style>
+{% endblock %}

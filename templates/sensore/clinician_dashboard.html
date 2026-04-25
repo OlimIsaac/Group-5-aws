@@ -135,11 +135,11 @@
   .alert-table th {
     text-align: left; font-size: 0.72rem; font-family: var(--font-mono);
     color: var(--mist); text-transform: uppercase; letter-spacing: 0.06em;
-    padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 6px 12px; border-bottom: 1px solid var(--line-subtle);
   }
   .alert-table td {
     padding: 9px 12px; font-size: 0.85rem; color: var(--pale);
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid var(--line-faint);
   }
   .alert-table tr:last-child td { border: none; }
 
@@ -152,7 +152,7 @@
     margin-bottom: 1.5rem;
   }
   .stat-block {
-    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+    background: var(--surface-soft); border: 1px solid var(--surface-soft-border);
     border-radius: var(--radius-sm); padding: 0.9rem 1.1rem;
     text-align: center;
   }
@@ -565,7 +565,7 @@ async function loadSessionDetail(sessionId) {
   }
 
   commentsWrap.innerHTML = comments.map(c => `
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.6rem">
+    <div style="background:var(--surface-soft);border:1px solid var(--surface-soft-border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.6rem">
       <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <strong style="color:${c.author_type==='clinician'?'var(--amber)':'var(--teal)'};font-size:0.82rem">
           ${escHtml(c.author)} <span style="font-weight:400;opacity:0.7">(${c.author_type})</span>
@@ -589,7 +589,7 @@ async function loadSessionDetail(sessionId) {
       ` : ''}
       <div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center" id="reply-form-${c.id}">
         <input type="text" placeholder="Reply as clinician…"
-               style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:5px 10px;color:var(--white);font-size:0.82rem;font-family:var(--font-main)"
+           style="flex:1;background:var(--input-bg);border:1px solid var(--input-border);border-radius:6px;padding:5px 10px;color:var(--white);font-size:0.82rem;font-family:var(--font-main)"
                id="reply-input-${c.id}" />
         <button class="btn btn-sm btn-primary" onclick="submitReply(${c.id})">Reply</button>
       </div>

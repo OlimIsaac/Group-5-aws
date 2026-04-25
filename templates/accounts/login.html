@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sensore — Sign In</title>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('sensore-theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <style>
@@ -12,6 +22,25 @@
       --teal: #00d4c8; --pale: #c8daea; --mist: #5a7a9a;
       --fog: #8fa8be; --white: #f5f9ff; --red: #ef4444;
       --card-border: rgba(0,212,200,0.12);
+      --bg-grad-1: rgba(0,212,200,0.09);
+      --bg-grad-2: rgba(0,168,158,0.06);
+      --input-bg: rgba(255,255,255,0.05);
+      --input-border: rgba(255,255,255,0.1);
+      --input-focus-bg: rgba(0,212,200,0.05);
+      --card-bg: rgba(15, 39, 68, 0.9);
+    }
+
+    html[data-theme='light'] {
+      --navy: #f3f7fc; --navy-mid: #e8eff7; --navy-light: #d7e4f1;
+      --teal: #0f8f89; --pale: #263b52; --mist: #5f738a;
+      --fog: #445970; --white: #12263d;
+      --card-border: rgba(18,38,61,0.14);
+      --bg-grad-1: rgba(15,143,137,0.09);
+      --bg-grad-2: rgba(15,143,137,0.05);
+      --input-bg: rgba(18,38,61,0.04);
+      --input-border: rgba(18,38,61,0.14);
+      --input-focus-bg: rgba(15,143,137,0.08);
+      --card-bg: rgba(255, 255, 255, 0.95);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -20,8 +49,8 @@
       min-height: 100vh;
       display: grid; place-items: center;
       background-image:
-        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,212,200,0.09) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 50% at 10% 90%, rgba(0,168,158,0.06) 0%, transparent 60%);
+        radial-gradient(ellipse 80% 60% at 50% -10%, var(--bg-grad-1) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at 10% 90%, var(--bg-grad-2) 0%, transparent 60%);
     }
     .login-wrap {
       width: 100%; max-width: 420px; padding: 1.5rem;
@@ -41,7 +70,7 @@
     }
     .brand p { font-size: 0.875rem; color: var(--mist); }
     .card {
-      background: rgba(15, 39, 68, 0.9);
+      background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 14px;
       padding: 2rem;
@@ -52,11 +81,11 @@
     .form-label { display: block; font-size: 0.75rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
     .form-control {
       width: 100%; padding: 10px 14px;
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      background: var(--input-bg); border: 1px solid var(--input-border);
       border-radius: 8px; color: var(--white); font-family: 'DM Sans', sans-serif;
       font-size: 0.95rem; transition: border-color 0.18s;
     }
-    .form-control:focus { outline: none; border-color: var(--teal); background: rgba(0,212,200,0.05); }
+    .form-control:focus { outline: none; border-color: var(--teal); background: var(--input-focus-bg); }
     .btn-submit {
       width: 100%; padding: 11px;
       background: var(--teal); color: var(--navy);

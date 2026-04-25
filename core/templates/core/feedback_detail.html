@@ -24,7 +24,7 @@
         <h3>Feedback Details</h3>
         <div class="feedback-info">
             <p><strong>Submitted by:</strong> {{ feedback.user.username }} ({{ feedback.user.get_role_display }})</p>
-            <p><strong>Submitted on:</strong> {{ feedback.timestamp|date:"M d, Y H:i" }}</p>
+            <p><strong>Submitted on:</strong> {{ feedback.created_at|date:"M d, Y H:i" }}</p>
             <p><strong>Status:</strong> <span class="badge badge-{{ feedback.status }}">{{ feedback.get_status_display }}</span></p>
             {% if feedback.reviewed_by %}
             <p><strong>Reviewed by:</strong> {{ feedback.reviewed_by.username }} on {{ feedback.reviewed_at|date:"M d, Y H:i" }}</p>
@@ -33,7 +33,7 @@
         
         <div class="feedback-text">
             <h4>Feedback Text</h4>
-            <p>{{ feedback.feedback_text }}</p>
+            <p>{{ feedback.comment }}</p>
         </div>
         
         {% if feedback.admin_notes %}
@@ -47,17 +47,12 @@
     <div class="sensor-data-card">
         <h3>Related Sensor Reading</h3>
         <div class="sensor-info">
-            <p><strong>Frame ID:</strong> {{ feedback.pressure_frame.id }}</p>
-            <p><strong>Timestamp:</strong> {{ feedback.pressure_frame.timestamp|date:"M d, Y H:i:s" }}</p>
-            <p><strong>User:</strong> {{ feedback.pressure_frame.user.username }}</p>
-            <p><strong>Peak Pressure:</strong> {{ feedback.pressure_frame.peak_pressure_index|default:"N/A" }}</p>
-            <p><strong>Contact Area:</strong> {{ feedback.pressure_frame.contact_area_percentage|default:"N/A" }}%</p>
-            <p><strong>High Pressure Flag:</strong> {{ feedback.pressure_frame.high_pressure_flag|yesno:"Yes,No" }}</p>
-        </div>
-        
-        <div class="matrix-preview">
-            <h4>Pressure Matrix Preview</h4>
-            <pre>{{ feedback.pressure_frame.raw_matrix|truncatechars:200 }}</pre>
+            <p><strong>Record ID:</strong> {{ feedback.sensor_data.id }}</p>
+            <p><strong>Timestamp:</strong> {{ feedback.sensor_data.timestamp|date:"M d, Y H:i:s" }}</p>
+            <p><strong>User:</strong> {{ feedback.sensor_data.user.username }}</p>
+            <p><strong>Pressure Value:</strong> {{ feedback.sensor_data.pressure_value }}</p>
+            <p><strong>Sensor:</strong> {{ feedback.sensor_data.sensor_id|default:"N/A" }}</p>
+            <p><strong>Location:</strong> {{ feedback.sensor_data.location|default:"N/A" }}</p>
         </div>
     </div>
 

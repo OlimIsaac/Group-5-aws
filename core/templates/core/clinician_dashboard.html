@@ -1,12 +1,493 @@
-{% extends 'core/base.html' %}
+{% extends "base.html" %}
 {% load static %}
-{% block title %}Clinician Dashboard{% endblock %}
+{% block title %}Clinician Dashboard — Sensore{% endblock %}
+{% block nav_clin %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── CLINICIAN DASHBOARD LAYOUT ── */
+  .clin-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .clin-stat {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 1.1rem;
+    text-align: center;
+    backdrop-filter: blur(8px);
+  }
+  .clin-stat-num {
+    font-size: 1.8rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--teal);
+    line-height: 1.1;
+  }
+  .clin-stat-num.danger { color: var(--red); }
+  .clin-stat-num.success { color: var(--green); }
+  .clin-stat-lbl {
+    font-size: 0.7rem;
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 4px;
+  }
+
+  /* ── WORKSPACE GRID ── */
+  .clin-workspace {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  /* ── SIDEBAR ── */
+  .clin-sidebar {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+    position: sticky;
+    top: 70px;
+  }
+  .clin-sidebar-head {
+    padding: 1rem 1rem 0.5rem;
+    border-bottom: 1px solid rgba(0,212,200,0.08);
+  }
+  .clin-sidebar-head h3 {
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+  .clin-search {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
+    color: var(--white);
+    font-family: var(--font-main);
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .clin-search:focus { border-color: var(--teal); background: var(--input-focus-bg); }
+  .clin-search::placeholder { color: var(--mist); }
+  .clin-filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .clin-filter-select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-sm);
+    padding: 5px 8px;
+    color: var(--pale);
+    font-family: var(--font-main);
+    font-size: 0.72rem;
+    cursor: pointer;
+    outline: none;
+  }
+  .clin-filter-select:focus { border-color: var(--teal); }
+  .clin-list-count {
+    font-size: 0.68rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+    margin-top: 6px;
+  }
+
+  /* ── PATIENT LIST ── */
+  .clin-patient-list {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    padding: 0.5rem;
+  }
+  .clin-patient-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    transition: background var(--transition), border-color var(--transition);
+    border: 1px solid transparent;
+    margin-bottom: 2px;
+  }
+  .clin-patient-item:hover {
+    background: var(--interactive-hover-bg);
+    border-color: rgba(0,212,200,0.15);
+  }
+  .clin-patient-item.active {
+    background: rgba(0,212,200,0.08);
+    border-color: rgba(0,212,200,0.3);
+  }
+  .clin-p-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--white);
+  }
+  .clin-p-email {
+    font-size: 0.7rem;
+    color: var(--mist);
+    word-break: break-word;
+  }
+  .clin-p-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 0.72rem;
+  }
+
+  /* ── DETAIL PANE ── */
+  .clin-detail-empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--mist);
+    font-size: 0.9rem;
+  }
+  .clin-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .clin-detail-header h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--white);
+    margin: 0;
+  }
+  .clin-detail-header p {
+    color: var(--mist);
+    font-size: 0.8rem;
+    margin: 2px 0 0;
+  }
+  .clin-detail-status {
+    font-size: 0.72rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+    margin-bottom: 0.75rem;
+    min-height: 16px;
+  }
+  .clin-detail-status.saved { color: var(--green); }
+  .clin-detail-status.error { color: var(--red); }
+
+  /* ── HEATMAP + METRICS ROW ── */
+  .clin-viz-row {
+    display: grid;
+    grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    margin-bottom: 1.25rem;
+  }
+  .clin-heatmap-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    backdrop-filter: blur(8px);
+  }
+  .clin-heatmap-card .card-label {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.75rem;
+  }
+  .clin-heatmap-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    background: rgba(10,22,40,0.5);
+    border: 1px solid rgba(0,212,200,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    aspect-ratio: 1;
+  }
+  .clin-heatmap-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+  .clin-heatmap-wrap .patient-annotation {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .clin-heatmap-note {
+    font-size: 0.75rem;
+    color: var(--mist);
+    margin-top: 0.5rem;
+    text-align: center;
+  }
+  .clin-heatmap-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 420px;
+    margin: 0 auto;
+    background: rgba(10,22,40,0.3);
+    border: 1px dashed rgba(90,122,154,0.3);
+    border-radius: 8px;
+    color: var(--mist);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 1rem;
+  }
+
+  /* ── METRICS PANEL ── */
+  .clin-metrics-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .clin-metrics-card .card-label {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--teal);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .clin-metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+  .clin-metric {
+    background: var(--surface-soft);
+    border: 1px solid var(--surface-soft-border);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.75rem;
+  }
+  .clin-metric-label {
+    font-size: 0.68rem;
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+  }
+  .clin-metric-value {
+    font-size: 1.3rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.2;
+  }
+  .clin-metric-value.low { color: var(--green); }
+  .clin-metric-value.moderate { color: var(--amber); }
+  .clin-metric-value.high { color: var(--red); }
+  .clin-metric-value.critical { color: #a78bfa; }
+  .clin-latest-ts {
+    font-size: 0.72rem;
+    color: var(--mist);
+    font-family: var(--font-mono);
+  }
+  .clin-trend-wrap {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+  }
+  #clinicianTrendChart {
+    width: 100% !important;
+    max-height: 200px;
+  }
+
+  /* ── TABS ── */
+  .clin-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: 0;
+  }
+  .clin-tab {
+    padding: 0.6rem 1rem;
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    color: var(--mist);
+    cursor: pointer;
+    border: none;
+    background: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid transparent;
+    transition: color var(--transition), border-color var(--transition);
+  }
+  .clin-tab:hover { color: var(--pale); }
+  .clin-tab.active {
+    color: var(--teal);
+    border-bottom-color: var(--teal);
+  }
+  .clin-tab-panel {
+    display: none;
+    padding: 1rem;
+  }
+  .clin-tab-panel.active { display: block; }
+
+  /* ── BOTTOM CARD ── */
+  .clin-bottom-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+
+  /* ── FRAMES TABLE ── */
+  .clin-frames-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .clin-frames-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-subtle);
+  }
+  .clin-frames-table td {
+    padding: 7px 12px;
+    font-size: 0.82rem;
+    color: var(--pale);
+    border-bottom: 1px solid var(--line-faint);
+  }
+  .clin-frames-table tbody tr:hover { background: var(--row-hover); }
+  .clin-frames-table tbody tr.is-selected {
+    background: rgba(0,212,200,0.10);
+    box-shadow: inset 3px 0 0 rgba(0,212,200,0.65);
+  }
+  .clin-frames-table tbody tr.clin-frame-row { cursor: pointer; }
+  .clin-frames-table tbody tr:last-child td { border-bottom: none; }
+  .clin-frames-scroll {
+    max-height: 340px;
+    overflow-y: auto;
+  }
+
+  /* ── COMMENTS ── */
+  .clin-comment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .clin-comment-item {
+    background: var(--surface-soft);
+    border: 1px solid var(--surface-soft-border);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+  }
+  .clin-comment-meta {
+    font-size: 0.72rem;
+    color: var(--mist);
+    margin-bottom: 4px;
+  }
+  .clin-comment-text {
+    font-size: 0.82rem;
+    color: var(--pale);
+    line-height: 1.45;
+  }
+  .clin-comment-reply-existing {
+    font-size: 0.75rem;
+    color: var(--amber);
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(245,158,11,0.2);
+  }
+  .clin-reply-form {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    align-items: center;
+  }
+  .clin-reply-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: var(--white);
+    font-size: 0.78rem;
+    font-family: var(--font-main);
+    outline: none;
+  }
+  .clin-reply-input:focus { border-color: var(--teal); }
+
+  /* ── REPORT ACTIONS ── */
+  .clin-report-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* ── RISK PILLS (inline in sidebar) ── */
+  .risk-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 0.62rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .risk-pill.risk-low      { color: var(--green);  background: rgba(34,197,94,0.12);  border: 1px solid rgba(34,197,94,0.25); }
+  .risk-pill.risk-moderate  { color: var(--amber);  background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.25); }
+  .risk-pill.risk-high,
+  .risk-pill.risk-critical  { color: var(--red);    background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.25); }
+  .risk-pill.risk-none      { color: var(--mist);   background: var(--surface-soft);    border: 1px solid var(--surface-soft-border); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 960px) {
+    .clin-workspace {
+      grid-template-columns: 1fr;
+    }
+    .clin-sidebar {
+      position: static;
+    }
+    .clin-patient-list {
+      max-height: 300px;
+    }
+    .clin-viz-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
 
 {% block content %}
-<div class="dashboard-header">
-    <h2>Clinician Dashboard</h2>
-    <p>Manage your assigned patients</p>
-</div>
+<div class="page-wrap">
 
 {% if messages %}
     <div class="messages">
@@ -84,7 +565,12 @@
                     {% if pd.latest_annotation.note %}
                         <p class="annotation-note-text">&ldquo;{{ pd.latest_annotation.note }}&rdquo;</p>
                     {% endif %}
+
                 {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
                 <div style="margin-top:0.6rem;">
                     <p class="text-secondary" style="font-size:0.8rem;margin:0 0 0.35rem;">Today vs Previous</p>
@@ -172,13 +658,29 @@
                         No pressure data available
                     </p>
                 {% endif %}
-            </div>
-            {% endfor %}
+                <div class="clin-reply-form">
+                  <input type="text" class="clin-reply-input clinician-reply-input" placeholder="Write advice or follow-up…">
+                  <button type="button" class="btn btn-primary btn-sm clinician-reply-btn" data-comment-id="{{ comment.id }}">Reply</button>
+                </div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div style="color:var(--mist);text-align:center;padding:2rem;font-size:0.85rem">No comments from this patient yet.</div>
+            {% endif %}
+          </div>
         </div>
-    {% else %}
-        <p>No patients assigned yet.</p>
-    {% endif %}
-</div>
+      </div>
+    </div>
+
+  </div>
+
+  {% else %}
+  <div class="clin-detail-empty">
+    <div style="font-size:2.5rem;margin-bottom:0.75rem;opacity:0.4">📋</div>
+    <h3 style="color:var(--white);font-size:1rem;margin-bottom:0.4rem">No Patients Assigned</h3>
+    <p>No patients have been assigned to your account yet. Contact your administrator.</p>
+  </div>
+  {% endif %}
 
 <div class="card">
     <div class="d-flex justify-content-between align-items-center">
@@ -798,6 +1300,7 @@
 }
 </style>
 <script src="{% static 'js/heatmap.js' %}"></script>
+<script src="{% static 'js/clinician_dashboard.js' %}"></script>
 <script>
 function clampNumber(value, min, max) {
     return Math.min(Math.max(value, min), max);
