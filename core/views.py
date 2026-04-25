@@ -5,6 +5,11 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from django.contrib import messages
+from django.utils import timezone as dj_timezone
+
+from .models import PREDEFINED_ZONES, HeatmapAnnotation, PainZoneReport, User, PressureFrame, ClinicianProfile, Assignment, PatientProfile, Comment, Feedback
+from .utils import LOW_PRESSURE_THRESHOLD, HIGH_PRESSURE_THRESHOLD
+from .forms import CommentForm, AssignmentForm, PainZoneReportForm, UserForm, ClinicianProfileForm, PatientProfileForm, CustomUserCreationForm, FeedbackForm, FeedbackAdminForm
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
@@ -215,6 +220,14 @@ class HomeView(View):
     def get(self, request):
         if not request.user.is_authenticated:
             return redirect('login')
+
+        if not request.user.role:
+            if request.user.is_superuser or request.user.is_staff:
+                request.user.role = User.ROLE_ADMIN
+                request.user.save(update_fields=['role'])
+            else:
+                logout(request)
+                return redirect('login')
         
         # Redirect based on role
         if request.user.role == User.ROLE_ADMIN:
@@ -858,180 +871,123 @@ class ClinicianDashboardView(LoginRequiredMixin, View):
 class ClinicianDashboardDataAPIView(LoginRequiredMixin, View):
     login_url = 'login'
 
-    def get(self, request):
-        if request.user.role != User.ROLE_CLINICIAN:
-            return JsonResponse({'error': 'Unauthorized'}, status=403)
+        start_of_day = dj_timezone.localtime(dj_timezone.now()).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
 
-        assignments = ClinicianPatientAssignment.objects.filter(clinician=request.user).select_related('patient')
-        patients = []
+        patients_data = []
         for assignment in assignments:
-            patient = assignment.patient
-            latest_frame = PressureFrame.objects.filter(user=patient).order_by('-timestamp').first()
-            latest_metrics = _ensure_frame_metrics(latest_frame) if latest_frame else None
-            latest_annotation = HeatmapAnnotation.objects.filter(user=patient).order_by('-timestamp').first()
-            latest_matrix = None
-            if latest_metrics:
-                try:
-                    latest_matrix = latest_metrics['matrix']
-                except:
-                    latest_matrix = None
-            annotation_cells = []
-            if latest_annotation:
-                try:
-                    annotation_cells = latest_annotation.cells
-                except:
-                    annotation_cells = []
-            patients.append({
-                'id': patient.id,
-                'name': patient.get_full_name() or patient.username,
-                'email': patient.email,
-                'latest_matrix': latest_matrix,
-                'latest_ppi': latest_metrics['peak_pressure_index'] if latest_metrics else None,
-                'latest_contact': latest_metrics['contact_area_percentage'] if latest_metrics else None,
-                'latest_risk_score': latest_metrics['risk_score'] if latest_metrics else None,
-                'latest_risk_level': latest_metrics['risk_level'] if latest_metrics else None,
-                'high_pressure': latest_metrics['high_pressure_flag'] if latest_metrics else False,
-                'latest_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
-                'pressure_timestamp': latest_frame.timestamp.isoformat() if latest_frame else None,
-                'annotation_cells': annotation_cells,
-                'annotation_note': latest_annotation.note if latest_annotation else '',
-                'annotation_timestamp': latest_annotation.timestamp.isoformat() if latest_annotation else None,
+            patient_user = assignment.patient.user
+            latest_frame = PressureFrame.objects.filter(user=patient_user).order_by('-timestamp').first()
+            latest_annotation = HeatmapAnnotation.objects.filter(user=patient_user).first()
+            if latest_frame and latest_frame.timestamp >= start_of_day:
+                today_frame = latest_frame
+            else:
+                today_frame = PressureFrame.objects.filter(
+                    user=patient_user, timestamp__gte=start_of_day
+                ).order_by('-timestamp').first()
+            previous_frame = PressureFrame.objects.filter(
+                user=patient_user, timestamp__lt=start_of_day
+            ).order_by('-timestamp').first()
+
+            ppi_delta = None
+            contact_delta = None
+            if today_frame and previous_frame:
+                if (today_frame.peak_pressure_index is not None and
+                        previous_frame.peak_pressure_index is not None):
+                    ppi_delta = (
+                        today_frame.peak_pressure_index -
+                        previous_frame.peak_pressure_index
+                    )
+                if (today_frame.contact_area_percentage is not None and
+                        previous_frame.contact_area_percentage is not None):
+                    contact_delta = (
+                        today_frame.contact_area_percentage -
+                        previous_frame.contact_area_percentage
+                    )
+            patients_data.append({
+                'assignment': assignment,
+                'latest_frame': latest_frame,
+                'latest_annotation': latest_annotation,
+                'today_frame': today_frame,
+                'previous_frame': previous_frame,
+                'ppi_delta': ppi_delta,
+                'contact_delta': contact_delta,
+                'matrix_json': json.dumps(latest_frame.raw_matrix) if latest_frame else 'null',
+                'cells_json': json.dumps(latest_annotation.cells) if latest_annotation else '[]',
             })
 
-        return JsonResponse({'patients': patients})
+        patient_users = [assignment.patient.user for assignment in assignments]
+        high_pressure_events = []
+        average_pressure_events = []
+        low_pressure_events = []
+        if patient_users:
+            base_qs = PressureFrame.objects.filter(
+                user__in=patient_users,
+                peak_pressure_index__isnull=False,
+            ).select_related('user').order_by('-timestamp')
+
+            high_pressure_events = list(
+                base_qs.filter(peak_pressure_index__gte=HIGH_PRESSURE_THRESHOLD)[:20]
+            )
+            average_pressure_events = list(
+                base_qs.filter(
+                    peak_pressure_index__gt=LOW_PRESSURE_THRESHOLD,
+                    peak_pressure_index__lt=HIGH_PRESSURE_THRESHOLD,
+                )[:20]
+            )
+            low_pressure_events = list(
+                base_qs.filter(peak_pressure_index__lte=LOW_PRESSURE_THRESHOLD)[:20]
+            )
+
+        patient_comments = []
+        if patient_users:
+            patient_comments = (
+                Comment.objects.filter(user__in=patient_users)
+                .select_related('user', 'pressure_frame')
+                .order_by('-timestamp')
+            )
+
+        return render(request, 'core/clinician_dashboard.html', {
+            'patients_data': patients_data,
+            'high_pressure_events': high_pressure_events,
+            'average_pressure_events': average_pressure_events,
+            'low_pressure_events': low_pressure_events,
+            'patient_comments': patient_comments,
+        })
 
 
-class ClinicianPatientDetailAPIView(LoginRequiredMixin, View):
-    login_url = 'login'
-
-    def get(self, request, patient_id):
-        if request.user.role != User.ROLE_CLINICIAN:
-            return JsonResponse({'error': 'Unauthorized'}, status=403)
-
-        assignment = (
-            ClinicianPatientAssignment.objects
-            .filter(clinician=request.user, patient_id=patient_id)
-            .select_related('patient')
-            .first()
-        )
-        if not assignment:
-            return JsonResponse({'error': 'Patient not assigned to this clinician'}, status=404)
-
-        return JsonResponse(_build_clinician_patient_detail_payload(assignment.patient))
-
-
-class ClinicianPatientFrameDetailAPIView(LoginRequiredMixin, View):
-    login_url = 'login'
-
-    def get(self, request, patient_id, frame_id):
-        if request.user.role != User.ROLE_CLINICIAN:
-            return JsonResponse({'error': 'Unauthorized'}, status=403)
-
-        assignment = (
-            ClinicianPatientAssignment.objects
-            .filter(clinician=request.user, patient_id=patient_id)
-            .select_related('patient')
-            .first()
-        )
-        if not assignment:
-            return JsonResponse({'error': 'Patient not assigned to this clinician'}, status=404)
-
-        frame = PressureFrame.objects.filter(user=assignment.patient, pk=frame_id).first()
-        if not frame:
-            return JsonResponse({'error': 'Frame not found for this patient'}, status=404)
-
-        payload = _build_clinician_frame_detail_payload(frame)
-        if not payload:
-            return JsonResponse({'error': 'Frame metrics unavailable'}, status=422)
-
-        return JsonResponse(payload)
-
-
-class ClinicianCommentReplyAPIView(LoginRequiredMixin, View):
+class ReplyCommentView(LoginRequiredMixin, View):
     login_url = 'login'
 
     def post(self, request, comment_id):
         if request.user.role != User.ROLE_CLINICIAN:
-            return JsonResponse({'error': 'Unauthorized'}, status=403)
+            return redirect('home')
+
+        reply_text = request.POST.get('clinician_reply', '').strip()
+        if not reply_text:
+            messages.error(request, 'Reply cannot be empty.')
+            return redirect('clinician_dashboard')
+
+        comment = get_object_or_404(Comment, pk=comment_id)
 
         try:
-            body = json.loads(request.body.decode('utf-8'))
-        except Exception:
-            body = {}
+            profile = ClinicianProfile.objects.get(user=request.user)
+        except ClinicianProfile.DoesNotExist:
+            return redirect('home')
 
-        reply_text = (body.get('reply') or '').strip()
-        if not reply_text:
-            return JsonResponse({'error': 'Reply text is required.'}, status=400)
-
-        comment = get_object_or_404(
-            Comment.objects.select_related('pressure_frame', 'user'),
-            pk=comment_id,
-        )
-
-        is_assigned = ClinicianPatientAssignment.objects.filter(
-            clinician=request.user,
-            patient=comment.user,
+        is_assigned = Assignment.objects.filter(
+            clinician=profile,
+            patient__user=comment.user,
         ).exists()
         if not is_assigned:
-            return JsonResponse({'error': 'Patient not assigned to this clinician.'}, status=403)
+            messages.error(request, 'You are not assigned to this patient.')
+            return redirect('clinician_dashboard')
 
         comment.clinician_reply = reply_text
         comment.save(update_fields=['clinician_reply'])
-
-        return JsonResponse({
-            'id': comment.id,
-            'clinician_reply': comment.clinician_reply,
-            'frame_timestamp': comment.pressure_frame.timestamp.isoformat(),
-        })
-
-
-class ClinicianPatientReportView(LoginRequiredMixin, View):
-    login_url = 'login'
-
-    def get(self, request, patient_id):
-        if request.user.role != User.ROLE_CLINICIAN:
-            return redirect('home')
-
-        assignment = (
-            ClinicianPatientAssignment.objects
-            .filter(clinician=request.user, patient_id=patient_id)
-            .select_related('patient')
-            .first()
-        )
-        if not assignment:
-            return HttpResponseForbidden('You are not assigned to this patient.')
-
-        patient = assignment.patient
-        report_payload = _build_report_payload_for_user(patient)
-
-        if request.GET.get('download') == '1':
-            response = HttpResponse(content_type='text/csv')
-            safe_name = patient.username.replace(' ', '_')
-            response['Content-Disposition'] = f'attachment; filename="{safe_name}_medical_history.csv"'
-            writer = csv.writer(response)
-            writer.writerow(['timestamp', 'peak_pressure_index', 'contact_area_pct', 'risk_score', 'risk_level', 'high_pressure_flag', 'comments'])
-            for row in report_payload['frame_rows']:
-                writer.writerow([
-                    row['frame'].timestamp.isoformat(),
-                    row['metrics']['peak_pressure_index'],
-                    row['metrics']['contact_area_percentage'],
-                    row['metrics']['risk_score'],
-                    row['metrics']['risk_level'],
-                    row['metrics']['high_pressure_flag'],
-                    row['comment_count'],
-                ])
-            return response
-
-        context = {
-            'frame_rows': report_payload['frame_rows'][:300],
-            'generated_at': timezone.now(),
-            'total_frames': report_payload['total_frames'],
-            'avg_ppi': report_payload['avg_ppi'],
-            'avg_contact': report_payload['avg_contact'],
-            'high_events': report_payload['high_events'],
-            'patient': patient,
-        }
-        return render(request, 'core/clinician_patient_report.html', context)
+        messages.success(request, 'Reply saved.')
+        return redirect('clinician_dashboard')
 
 
 class AdminDashboardView(LoginRequiredMixin, View):

@@ -59,6 +59,7 @@ urlpatterns = [
     # Comment Management
     path('manage/comments/', views.CommentListView.as_view(), name='comment_list'),
     path('manage/comments/<int:comment_id>/delete/', views.DeleteCommentView.as_view(), name='delete_comment'),
+    path('clinician/comments/<int:comment_id>/reply/', views.ReplyCommentView.as_view(), name='reply_comment'),
     
     # Feedback Management
     path('feedback/submit/', views.SubmitFeedbackView.as_view(), name='submit_feedback'),

@@ -116,10 +116,14 @@ function drawHeatmapOnCanvas(canvas, matrix) {
     for (var r = 0; r < 32; r++) {
         var y = cellBounds(r, canvas.height);
         for (var c = 0; c < 32; c++) {
-            var x = cellBounds(c, canvas.width);
-            var rgb = pressureToRgb(normalised[r][c]);
-            ctx.fillStyle = 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
-            ctx.fillRect(x[0], y[0], x[1] - x[0], y[1] - y[0]);
+            var value = matrix[r][c];
+            var norm = value / 4095;
+            var red = Math.round(10 + 150 * norm);
+            var green = Math.round(14 + 80 * norm);
+            var blue = Math.round(22 + 55 * norm);
+            ctx.fillStyle = 'rgb(' + red + ',' + green + ',' + blue + ')';
+            ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+
         }
     }
 

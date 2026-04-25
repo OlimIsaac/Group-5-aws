@@ -40,6 +40,84 @@
   .patient-actions {
     display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: auto; padding-top: 0.25rem;
   }
+  .compare-panel {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.3);
+  }
+  .compare-title {
+    font-size: 0.7rem;
+    color: var(--mist);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .compare-title .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #22d3ee, #38bdf8);
+    box-shadow: 0 0 6px rgba(34, 211, 238, 0.6);
+  }
+  .compare-grid {
+    display: grid;
+    gap: 0.5rem;
+  }
+  .compare-metric {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .compare-label {
+    font-size: 0.72rem;
+    color: var(--fog);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .metric-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .metric-icon-ppi { background: linear-gradient(135deg, #60a5fa, #2563eb); }
+  .metric-icon-contact { background: linear-gradient(135deg, #2dd4bf, #0f766e); }
+  .compare-values {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    font-family: var(--font-mono);
+  }
+  .compare-value { color: var(--white); font-weight: 700; font-size: 0.9rem; }
+  .compare-sub { color: var(--mist); font-size: 0.72rem; }
+  .compare-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+  .delta-up { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+  .delta-down { background: rgba(248, 113, 113, 0.2); color: #fca5a5; }
+  .delta-flat { background: rgba(148, 163, 184, 0.2); color: #e2e8f0; }
+  .delta-muted { background: rgba(148, 163, 184, 0.1); color: var(--mist); }
+  .compare-note {
+    font-size: 0.7rem;
+    color: var(--mist);
+  }
 
   /* PATIENT DETAIL PANEL */
   .detail-panel {
@@ -80,6 +158,78 @@
   }
   .stat-num { font-size: 1.8rem; font-family: var(--font-mono); font-weight: 700; color: var(--teal); }
   .stat-lbl { font-size: 0.72rem; color: var(--mist); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+  }
+  .status-dot-muted { background: #94a3b8; }
+  .status-dot-warn { background: #f59e0b; }
+  .status-dot-ok { background: #22c55e; }
+  .empty-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .profile-panel {
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.45);
+  }
+  .profile-panel summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .profile-panel summary::-webkit-details-marker { display: none; }
+  .profile-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mist);
+  }
+  .profile-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 4px;
+    display: inline-block;
+    background: linear-gradient(135deg, #22d3ee, #3b82f6);
+  }
+  .profile-sub {
+    font-size: 0.72rem;
+    color: var(--fog);
+  }
+  .profile-grid {
+    display: grid;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--pale);
+  }
+  .profile-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .profile-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .profile-icon-user { background: linear-gradient(135deg, #60a5fa, #2563eb); }
+  .profile-icon-id { background: linear-gradient(135deg, #c4b5fd, #7c3aed); }
+  .profile-icon-date { background: linear-gradient(135deg, #fcd34d, #f59e0b); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 {% endblock %}
@@ -135,7 +285,7 @@
             {% if ps.latest_session %}
               <span>📅 Last session: {{ ps.latest_session.session_date }}</span>
             {% else %}
-              <span>No sessions yet</span>
+              <span class="empty-inline"><span class="status-dot status-dot-muted"></span>No sessions yet</span>
             {% endif %}
             {% if ps.unack_alerts > 0 %}
               <span class="alert-count">⚠ {{ ps.unack_alerts }} alert{{ ps.unack_alerts|pluralize }}</span>
@@ -145,10 +295,69 @@
             <span class="risk-badge {{ ps.latest_risk }}">{{ ps.latest_risk|capfirst }} Risk</span>
             <span class="text-muted" style="font-size:0.8rem">View →</span>
           </div>
+          <details class="profile-panel" onclick="event.stopPropagation()">
+            <summary>
+              <span class="profile-title"><span class="profile-dot"></span>Patient profile</span>
+              <span class="profile-sub">Click to expand</span>
+            </summary>
+            <div class="profile-grid">
+              <div class="profile-item"><span class="profile-icon profile-icon-user"></span>{{ ps.user.get_full_name|default:ps.user.username }}</div>
+              <div class="profile-item"><span class="profile-icon profile-icon-id"></span>Username: {{ ps.user.username }}</div>
+              <div class="profile-item"><span class="profile-icon profile-icon-date"></span>Last session: {% if ps.latest_session %}{{ ps.latest_session.session_date }}{% else %}--{% endif %}</div>
+            </div>
+          </details>
+          <div class="compare-panel">
+            <div class="compare-title"><span class="dot"></span> Today vs Previous</div>
+            {% if ps.latest_metrics %}
+              <div class="compare-grid">
+                <div class="compare-metric">
+                  <div>
+                    <div class="compare-label"><span class="metric-icon metric-icon-ppi"></span>PPI</div>
+                    <div class="compare-values">
+                      <span class="compare-value">{{ ps.latest_metrics.peak_pressure_index|floatformat:1 }}</span>
+                      <span class="compare-sub">prev
+                        {% if ps.previous_metrics %}{{ ps.previous_metrics.peak_pressure_index|floatformat:1 }}{% else %}--{% endif %}
+                      </span>
+                    </div>
+                  </div>
+                  {% if ps.ppi_delta is not None %}
+                    <span class="compare-delta {% if ps.ppi_delta > 0 %}delta-up{% elif ps.ppi_delta < 0 %}delta-down{% else %}delta-flat{% endif %}">
+                      {% if ps.ppi_delta > 0 %}&uarr;{% elif ps.ppi_delta < 0 %}&darr;{% else %}&rarr;{% endif %}
+                      {{ ps.ppi_delta|floatformat:1 }}
+                    </span>
+                  {% else %}
+                    <span class="compare-delta delta-muted">no prior</span>
+                  {% endif %}
+                </div>
+                <div class="compare-metric">
+                  <div>
+                    <div class="compare-label"><span class="metric-icon metric-icon-contact"></span>Contact</div>
+                    <div class="compare-values">
+                      <span class="compare-value">{{ ps.latest_metrics.contact_area_percent|floatformat:1 }}%</span>
+                      <span class="compare-sub">prev
+                        {% if ps.previous_metrics %}{{ ps.previous_metrics.contact_area_percent|floatformat:1 }}%{% else %}--{% endif %}
+                      </span>
+                    </div>
+                  </div>
+                  {% if ps.contact_delta is not None %}
+                    <span class="compare-delta {% if ps.contact_delta > 0 %}delta-up{% elif ps.contact_delta < 0 %}delta-down{% else %}delta-flat{% endif %}">
+                      {% if ps.contact_delta > 0 %}&uarr;{% elif ps.contact_delta < 0 %}&darr;{% else %}&rarr;{% endif %}
+                      {{ ps.contact_delta|floatformat:1 }}%
+                    </span>
+                  {% else %}
+                    <span class="compare-delta delta-muted">no prior</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="compare-note">Based on latest two sessions.</div>
+            {% else %}
+              <div class="compare-note empty-inline"><span class="status-dot status-dot-muted"></span>No session metrics to compare.</div>
+            {% endif %}
+          </div>
         </div>
         {% empty %}
         <div class="text-muted" style="grid-column:1/-1;text-align:center;padding:2rem;font-size:0.9rem">
-          No patients assigned to your account yet.
+          <span class="empty-inline"><span class="status-dot status-dot-muted"></span>No patients assigned to your account yet.</span>
         </div>
         {% endfor %}
       </div>

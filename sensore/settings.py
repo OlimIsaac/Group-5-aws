@@ -105,3 +105,38 @@ REST_FRAMEWORK = {
 		"rest_framework.permissions.IsAuthenticated",
 	],
 }
+
+# Password validation helps enforce stronger clinician credentials.
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
+# Login security thresholds (used by core.auth.LoginView).
+MAX_LOGIN_ATTEMPTS = int(os.environ.get("DJANGO_MAX_LOGIN_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_MINUTES = int(os.environ.get("DJANGO_LOGIN_LOCKOUT_MINUTES", "15"))
+LOGIN_ATTEMPT_WINDOW_MINUTES = int(os.environ.get("DJANGO_LOGIN_ATTEMPT_WINDOW_MINUTES", "10"))
+
+# Session and transport hardening.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
